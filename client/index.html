@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>+1 Speed Parkour Obby Escape</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='8' y='14' width='84' height='72' rx='16' fill='%23ea001b' stroke='%231c1530' stroke-width='8'/%3E%3Cpath d='M50 24 L80 54 L80 70 L50 42 L20 70 L20 54 Z' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Montserrat:wght@800&display=swap">
+<style>
+:root {
+    color-scheme: dark;
+    --ink: #1c1530;
+    --yellow: #ffd028;
+    --green: #46ec50;
+    --blue: #28c8ff;
+    --red: #e82434;
+    --white: #ffffff;
+    --font: "Fredoka", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
+    font-size: clamp(9px, calc(100vmin / 52), 17px);
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: #b8a8f0; }
+body { font-family: var(--font); color: var(--white); user-select: none; -webkit-user-select: none; touch-action: none; }
+#app { position: fixed; inset: 0; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+#speedLines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+button { font-family: var(--font); cursor: pointer; color: var(--white); }
+button:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+
+.o { text-shadow: -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink), 2px 2px 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 3px 0 var(--ink); }
+.o1 { text-shadow: -1px -1px 0 var(--ink), 1px -1px 0 var(--ink), -1px 1px 0 var(--ink), 1px 1px 0 var(--ink), 0 1.5px 0 var(--ink); }
+
+.btn {
+    border: 3px solid var(--ink); border-radius: 0.9rem; font-weight: 700;
+    box-shadow: inset 0 -0.3rem 0 rgba(0, 0, 0, 0.22), inset 0 0.2rem 0 rgba(255, 255, 255, 0.3), 0 0.2rem 0 var(--ink);
+    transition: transform 0.18s cubic-bezier(0.34, 1.8, 0.5, 1), filter 0.15s ease;
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px) scale(1.04); filter: brightness(1.08); }
+.btn:active:not(:disabled) { transform: translateY(2px) scale(0.95); transition-duration: 0.06s; }
+.btn:disabled { filter: grayscale(0.7) brightness(0.85); cursor: default; }
+.g-yellow { background: linear-gradient(#ffe86a, #ffa414); }
+.g-green { background: linear-gradient(#8aff7a, #22c73a); }
+.g-blue { background: linear-gradient(#7ae6ff, #1f8fff); }
+.g-red { background: linear-gradient(#ff7a8a, #e8182c); }
+.g-purple { background: linear-gradient(#e27bff, #8a1cff); }
+.g-pink { background: linear-gradient(#ff9ae0, #ff3fa0); }
+.g-orange { background: linear-gradient(#ffb04a, #ff6a14); }
+.g-grey { background: linear-gradient(#b8b4d6, #6f6a98); }
+.g-rainbow { background: linear-gradient(100deg, #ff3c5a 0%, #ffb51c 22%, #ffe83a 38%, #46ec50 55%, #28c8ff 72%, #8a5aff 88%, #ff4ad8 100%); background-size: 200% 100%; animation: rainbow 4s linear infinite; }
+.g-hot { background: linear-gradient(100deg, #ff2a4a 0%, #ff3ad8 45%, #ffb51c 100%); background-size: 200% 100%; animation: rainbow 3s linear infinite; }
+@keyframes rainbow { to { background-position: 200% 0; } }
+
+/* HUD ------------------------------------------------------------------ */
+#hud { position: absolute; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+#hud .passive { pointer-events: none; }
+/* The left / right columns and the stage bar appear once the tutorial is done (as in the reference) */
+body.tut .post-tut { display: none !important; }
+body:not(.tut) #questBand { display: none; }
+
+/* Tutorial band across the top: "Train on the treadmill! (0/10)" */
+#questBand { position: absolute; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 12.5vh); height: 3.6rem; display: grid; place-items: center; background: rgba(20, 16, 36, 0.42); font-size: 2.3rem; font-weight: 700; white-space: nowrap; }
+#questBand.done { animation: questPop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes questPop { 0% { transform: scale(0.85); opacity: 0.4; } 100% { transform: scale(1); opacity: 1; } }
+
+/* Stage bar: 1-9 green circles, players' heads below with red markers */
+#stageBar { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 0.6rem); transform: translateX(-50%); width: min(37rem, 50vw); height: 6.6rem; }
+#stageBar .line { position: absolute; left: 1.2rem; right: 1.2rem; top: 1.05rem; height: 0.42rem; background: linear-gradient(#e8e4f4, #a8a0c8); border: 2px solid var(--ink); border-radius: 1rem; }
+#stageBar .dot { position: absolute; top: 0; width: 2.2rem; height: 2.2rem; margin-left: -1.1rem; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #a8ff8a, #22c73a 70%); border: 3px solid var(--ink); display: grid; place-items: center; font-size: 1.15rem; font-weight: 700; }
+#stageBar .dot.dim { filter: grayscale(0.6) brightness(0.8); }
+#stageBar .head { position: absolute; top: 3.1rem; width: 2.5rem; height: 2.5rem; margin-left: -1.25rem; border-radius: 50%; border: 2px solid var(--ink); display: grid; place-items: center; font-size: 1.1rem; font-weight: 700; transition: left 0.3s ease; }
+#stageBar .head::before { content: ''; position: absolute; top: -1rem; left: 50%; margin-left: -0.45rem; border: 0.45rem solid transparent; border-bottom: 0.7rem solid #ff2a3a; border-top: 0; }
+#stageBar .head.me { border: 3px solid #fff; box-shadow: 0 0 0 2px var(--ink); z-index: 2; }
+
+/* Level up: "Level 17 > Level 18 / Speed 42 > Speed 44" under the stage bar */
+#lvlBanner { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 6.9rem); transform: translateX(-50%); display: grid; justify-items: center; font-weight: 700; opacity: 0; pointer-events: none; }
+body.tut #lvlBanner { top: calc(env(safe-area-inset-top, 0px) + 0.8rem); }
+#lvlBanner .a { font-size: 1.4rem; color: #5ad8ff; }
+#lvlBanner .b { font-size: 1.4rem; color: #ffd028; }
+#lvlBanner.show { animation: lvl 2.6s ease forwards; }
+@keyframes lvl { 0% { opacity: 0; transform: translate(-50%, -0.6rem); } 10% { opacity: 1; transform: translate(-50%, 0); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Top right: Invite and the speaker */
+#topRight { position: absolute; right: max(0.8rem, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 0.7rem); display: flex; gap: 0.45rem; align-items: center; }
+#btnInvite { display: flex; align-items: center; gap: 0.35rem; background: rgba(20, 16, 36, 0.72); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 0.6rem; padding: 0.35rem 0.7rem; font-size: 1.15rem; font-weight: 700; }
+.sq { width: 2.5rem; height: 2.5rem; padding: 0.35rem; background: rgba(20, 16, 36, 0.72); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 0.6rem; display: grid; place-items: center; }
+.sq svg { width: 100%; height: 100%; }
+.sq.off { opacity: 0.55; }
+#fps { position: absolute; right: max(1rem, env(safe-area-inset-right, 0px)); top: 4rem; font-size: 0.85rem; font-weight: 700; color: #7dff6b; }
+
+/* Left: Wins, then TRAILS / REBIRTH / DAILY / Claim! */
+#leftCol { position: absolute; left: max(0.6rem, env(safe-area-inset-left, 0px)); top: 27%; display: grid; gap: 0.6rem; --tile: 5.6rem; }
+#winsCur { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 1.6rem 0.15rem 0.2rem; background: linear-gradient(90deg, rgba(20, 16, 36, 0.62), rgba(20, 16, 36, 0)); font-size: 2.6rem; font-weight: 700; line-height: 1; }
+#winsCur .cupIc { width: 3rem; height: 3rem; }
+#winsCur.bump b { display: inline-block; animation: bump 0.45s cubic-bezier(0.34, 1.8, 0.5, 1); }
+@keyframes bump { 35% { transform: scale(1.3); } }
+#tiles { display: grid; grid-template-columns: repeat(2, var(--tile)); gap: 0.45rem; }
+.rbx { position: relative; width: var(--tile); height: var(--tile); padding: 0; border: 0.22rem solid var(--ink); border-radius: 0.75rem; cursor: pointer; overflow: visible; background: var(--bg);
+    box-shadow: inset 0 0.22rem 0 rgba(255, 255, 255, 0.35), inset 0 -0.3rem 0 rgba(0, 0, 0, 0.18), 0 0.22rem 0 var(--ink);
+    transition: transform 0.18s cubic-bezier(0.34, 1.8, 0.5, 1), filter 0.15s ease; }
+.rbx .ic { position: absolute; left: 50%; top: 4%; width: 68%; height: 68%; transform: translateX(-50%); filter: drop-shadow(0 0.12rem 0 rgba(0, 0, 0, 0.3)); }
+.rbx .lb { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center; font-size: 1.12rem; font-weight: 700; line-height: 1; }
+.rbx:hover { transform: translateY(-2px) scale(1.06); filter: brightness(1.07); }
+.rbx:active { transform: translateY(2px) scale(0.93); transition-duration: 0.06s; }
+.rbx .new { position: absolute; right: -0.4rem; top: -0.9rem; font-size: 1rem; font-weight: 700; color: #ff3a5a; transform: rotate(10deg); }
+.rbx .badge { position: absolute; top: -0.5rem; right: -0.5rem; width: 1.5rem; height: 1.5rem; display: grid; place-items: center; background: #46ec50; border: 2px solid var(--ink); border-radius: 0.4rem; font-size: 1rem; font-weight: 700; }
+.rb-trails { --bg: linear-gradient(#c8a8ff, #8a4aff); }
+.rb-rebirth { --bg: linear-gradient(#ff8a8a, #e8202a); }
+.rb-daily { --bg: linear-gradient(#8ae8ff, #1aa0e8); }
+.rb-claim { --bg: linear-gradient(#ffe86a, #ff9a14); }
+
+/* Right: STARTER PACK, Custom Speed, x2 Speed */
+#rightCol { position: absolute; right: max(0.6rem, env(safe-area-inset-right, 0px)); top: 14%; display: grid; justify-items: end; gap: 0.7rem; }
+#rightTop { display: flex; align-items: flex-start; gap: 0.9rem; }
+#starter { position: relative; display: grid; justify-items: center; cursor: pointer; padding: 0; border: 0; background: none; }
+#starter .tm { font-size: 1.25rem; font-weight: 700; color: #ff3a4a; font-variant-numeric: tabular-nums; }
+#starter .gift { font-size: 4rem; line-height: 1; filter: drop-shadow(0 0.15rem 0 rgba(0, 0, 0, 0.4)); animation: giftBob 1.6s ease-in-out infinite; }
+@keyframes giftBob { 50% { transform: translateY(-0.25rem) rotate(-6deg); } }
+#starter .t1 { font-size: 1.3rem; font-weight: 700; color: var(--yellow); margin-top: -0.4rem; }
+#starter .pr { position: absolute; left: -0.6rem; top: 3.1rem; font-size: 1.15rem; font-weight: 700; color: #7dff6b; }
+#customSpeed { display: grid; gap: 0.1rem; text-align: center; width: 10rem; }
+#customSpeed label { font-size: 1.3rem; font-weight: 700; }
+#customSpeed .row { display: flex; align-items: center; gap: 0.2rem; background: linear-gradient(#dcd6f4, #9a92c8); border: 3px solid var(--ink); border-radius: 0.6rem; padding: 0.1rem 0.4rem; }
+#customSpeed .pen { font-size: 1.7rem; }
+#speedInput { width: 100%; min-width: 0; border: none; background: transparent; color: #7dff6b; font: 700 1.9rem var(--font); text-align: center; -moz-appearance: textfield; outline: none; text-shadow: -1px -1px 0 var(--ink), 1px -1px 0 var(--ink), -1px 1px 0 var(--ink), 1px 1px 0 var(--ink); }
+#speedInput::-webkit-outer-spin-button, #speedInput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+#customSpeed small { font-size: 1.3rem; font-weight: 700; color: var(--yellow); text-align: right; }
+#btn2x { position: relative; font-size: 2.2rem; padding: 0.25rem 0.8rem 0.25rem 2.4rem; border-radius: 0.9rem; line-height: 1.05; }
+#btn2x .bolt { position: absolute; left: 0.2rem; top: 50%; transform: translateY(-50%) rotate(-10deg); font-size: 2.2rem; }
+#price2x { font-size: 1.5rem; font-weight: 700; color: #7dff6b; margin-top: -0.4rem; }
+
+/* Bottom: Total Speed / Rebirth %, the Level bar, the four Speed packs */
+#bottom { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 0.6rem); transform: translateX(-50%); display: grid; justify-items: center; gap: 0.25rem; width: min(37rem, 56vw); pointer-events: none; }
+#bottom #buyRow { pointer-events: auto; }
+#statRow { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; }
+#totalSpeed { font-size: 2.15rem; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; padding-left: 0.2rem; }
+#rebPct { font-size: 1.35rem; font-weight: 700; color: #c45aff; }
+#levelBar { position: relative; width: 100%; height: 2.9rem; background: #3a3654; border: 3px solid var(--ink); border-radius: 0.55rem; overflow: hidden; box-shadow: 0 0.2rem 0 var(--ink); }
+#levelBar .fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: linear-gradient(#7ae8ff, #1aa8e8); transition: width 0.15s linear; }
+#levelBar .rest { position: absolute; inset: 0; background: linear-gradient(#b0a8c8, #8a82a8); z-index: -1; }
+#levelBar span { position: absolute; top: 50%; transform: translateY(-50%); font-size: 1.85rem; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; z-index: 1; }
+#levelTxt { left: 0.6rem; }
+#xpTxt { right: 0.6rem; }
+#buyRow { display: flex; gap: 0.45rem; width: 100%; }
+#buyRow .btn { flex: 1; display: grid; justify-items: center; align-content: center; padding: 0.15rem 0.3rem; border-radius: 0.6rem; min-width: 0; position: relative; overflow: hidden; }
+#buyRow .btn .a { font-size: 1.7rem; line-height: 1.1; white-space: nowrap; position: relative; }
+#buyRow .btn .p { font-size: 0.8rem; line-height: 1; white-space: nowrap; position: relative; }
+#buyRow .btn[data-pack="3"] .a { font-size: 1.3rem; }
+#buyRow .btn .sh { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%) rotate(-14deg) scaleX(-1); font-size: 2.6rem; opacity: 0.35; }
+
+/* Bottom right: Controls (F Super Jump, E Dash, C Slide, SPACE Double Jump) */
+#controls { position: absolute; right: max(0.6rem, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 5.4rem); display: grid; justify-items: center; gap: 0.15rem; }
+#controls h4 { margin: 0; font-size: 1.35rem; font-weight: 700; }
+#controls .grid { display: grid; grid-template-columns: repeat(2, 5rem); gap: 0.35rem 0.55rem; }
+.ck { display: grid; justify-items: center; gap: 0.05rem; }
+.ck .k { font-size: 0.85rem; font-weight: 700; line-height: 1; }
+.ck button { width: 5rem; height: 5rem; border-radius: 0.8rem; background: rgba(60, 54, 90, 0.55); border: 2px solid rgba(255, 255, 255, 0.35); font-size: 1.05rem; font-weight: 700; line-height: 1.05; display: grid; place-items: center; padding: 0.2rem; }
+.ck button small { display: block; font-size: 0.75rem; }
+.ck button.cd { background: rgba(30, 26, 50, 0.7); color: #c8c4e0; }
+.ck button.on { background: rgba(70, 236, 80, 0.45); }
+#ctrlToggle { position: absolute; left: -1.8rem; top: 50%; background: none; border: 0; font-size: 1.6rem; font-weight: 700; padding: 0.2rem; }
+#controls.min .grid, #controls.min h4 { display: none; }
+#controls.min #ctrlToggle { position: static; transform: rotate(180deg); }
+
+/* Revive: green winged button with the countdown, "Revive? (5.2) / ONLY 🏆6" */
+#revive { position: absolute; left: 50%; top: 61%; transform: translate(-50%, -50%); display: grid; justify-items: center; padding: 0.15rem 2.2rem; background: linear-gradient(#a8ff6a, #2ad83a); border: 3px solid var(--ink); border-radius: 0.7rem; box-shadow: 0 0.25rem 0 var(--ink); animation: popIn 0.3s cubic-bezier(0.2, 1.5, 0.4, 1); }
+#revive .q { font-size: 1.35rem; font-weight: 700; color: #ff2a3a; text-shadow: 0 1px 0 #fff; line-height: 1.1; }
+#revive .c { font-size: 2.1rem; font-weight: 700; line-height: 1.1; }
+#revive .w { position: absolute; top: 50%; font-size: 2.8rem; transform: translateY(-50%); filter: drop-shadow(0 0.1rem 0 rgba(0, 0, 0, 0.35)); }
+#revive .w.l { left: -1.9rem; transform: translateY(-50%) scaleX(-1); }
+#revive .w.r { right: -1.9rem; }
+#revive.poor { filter: grayscale(0.6); }
+
+/* Big centre texts */
+#stageTitle { position: absolute; left: 50%; top: 17%; transform: translateX(-50%); text-align: center; pointer-events: none; transition: opacity 0.6s ease; white-space: nowrap; }
+#stageTitle .n { font: 800 5.8rem Montserrat, var(--font); line-height: 1; color: #fff; text-shadow: -5px -5px 0 #16121f, 5px -5px 0 #16121f, -5px 5px 0 #16121f, 5px 5px 0 #16121f, 0 6px 0 #16121f, 0 -6px 0 #16121f, 6px 0 0 #16121f, -6px 0 0 #16121f, 0 10px 0 rgba(0, 0, 0, 0.35); }
+#stageTitle .s { font-size: 2.2rem; font-weight: 700; line-height: 1.2; }
+#stageTitle .s:empty { display: none; }
+#stageTitle.show .n { animation: slideIn 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+#stageTitle.show .s { animation: slideIn 0.55s 0.12s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-3rem) skewX(-12deg); } }
+
+#toasts { position: absolute; left: 50%; top: 31%; transform: translateX(-50%); display: grid; justify-items: center; gap: 0.3rem; pointer-events: none; }
+.toast { font-size: 1.5rem; font-weight: 700; white-space: nowrap; animation: toast 2.8s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
+@keyframes toast { 0% { opacity: 0; transform: translateY(1rem) scale(0.7); } 10% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-0.8rem); } }
+
+/* A Win: the giant trophy drops in at the top, "+1 WIN!" */
+#winPop { position: absolute; left: 50%; top: 4%; transform: translateX(-50%); display: grid; justify-items: center; pointer-events: none; }
+#winPop .cup { width: 15rem; height: 15rem; filter: drop-shadow(0 0.4rem 0 rgba(0, 0, 0, 0.35)); }
+#winPop .goal { font-size: clamp(3rem, 9vw, 5.6rem); font-weight: 700; line-height: 1; color: var(--yellow); margin-top: -1.5rem; }
+#winPop .sub { font-size: 1.8rem; font-weight: 700; color: #7dff6b; }
+#winPop .rays { position: absolute; left: 50%; top: 7.5rem; width: 32rem; height: 32rem; margin: -16rem 0 0 -16rem; border-radius: 50%; background: repeating-conic-gradient(rgba(255, 208, 40, 0.3) 0 10deg, transparent 10deg 20deg); mask-image: radial-gradient(circle, #000 20%, transparent 68%); -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 68%); z-index: -1; }
+#winPop.show .cup { animation: cupIn 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both, goalOut 0.4s 2.3s ease-in forwards; }
+#winPop.show .goal { animation: goalIn 0.6s 0.15s cubic-bezier(0.2, 1.6, 0.4, 1) both, goalOut 0.4s 2.3s ease-in forwards; }
+#winPop.show .sub { animation: subIn 0.5s 0.3s cubic-bezier(0.2, 1.5, 0.4, 1) both, goalOut 0.4s 2.3s ease-in forwards; }
+#winPop.show .rays { animation: spin 6s linear infinite, raysIn 0.6s ease-out both, goalOut 0.4s 2.3s ease-in forwards; }
+@keyframes cupIn { from { opacity: 0; transform: translateY(-8rem) scale(0.4) rotate(-20deg); } }
+@keyframes goalIn { from { opacity: 0; transform: scale(2.5) rotate(-10deg); } }
+@keyframes subIn { from { opacity: 0; transform: translateY(1.5rem); } }
+@keyframes raysIn { from { opacity: 0; transform: scale(0.3); } }
+@keyframes goalOut { to { opacity: 0; transform: scale(0.85); } }
+@keyframes spin { to { rotate: 360deg; } }
+
+#flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 55%, rgba(122, 232, 255, 0.4), rgba(122, 232, 255, 0) 60%); }
+#flash.show { animation: flash 0.7s ease-out; }
+#flash.dead { background: radial-gradient(circle at 50% 50%, rgba(255, 40, 60, 0) 30%, rgba(255, 40, 60, 0.5) 100%); }
+@keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+#tips { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 11.5rem); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem 1rem; max-width: min(44rem, 92vw); font-size: 1rem; font-weight: 600; color: #fff; background: rgba(20, 16, 36, 0.62); border-radius: 1rem; padding: 0.45rem 0.9rem; pointer-events: none; transition: opacity 0.8s ease; }
+#tips kbd { font: 700 0.85rem var(--font); background: var(--white); color: var(--ink); border-radius: 0.35rem; padding: 0.05rem 0.4rem; margin-right: 0.25rem; }
+
+/* Touch controls */
+#touch { position: absolute; inset: 0; pointer-events: none; }
+#stick { position: absolute; left: max(1.5rem, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem); width: 9rem; height: 9rem; border-radius: 50%; background: rgba(255, 255, 255, 0.14); border: 3px solid rgba(255, 255, 255, 0.4); pointer-events: auto; touch-action: none; }
+#knob { position: absolute; left: 50%; top: 50%; width: 3.8rem; height: 3.8rem; margin: -1.9rem 0 0 -1.9rem; border-radius: 50%; background: rgba(255, 255, 255, 0.6); border: 3px solid rgba(28, 16, 48, 0.6); }
+#jumpBtn { position: absolute; right: max(1.2rem, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 1.2rem); width: 6.4rem; height: 6.4rem; border-radius: 50%; pointer-events: auto; touch-action: none; font-size: 1.3rem; }
+body.touch #controls { bottom: calc(env(safe-area-inset-bottom, 0px) + 8.4rem); }
+body.touch #bottom { width: min(28rem, 50vw); }
+
+/* Panels ----------------------------------------------------------------- */
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(20, 10, 40, 0.45); padding: 1rem; }
+.overlay:not([hidden]) { animation: fadeIn 0.2s ease; }
+.overlay:not([hidden]) .panel, .overlay:not([hidden]) .card { animation: popIn 0.34s cubic-bezier(0.2, 1.5, 0.4, 1); }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes popIn { from { opacity: 0; transform: scale(0.8) translateY(1rem); } }
+.panel { width: min(38rem, 100%); max-height: min(36rem, 88vh); display: flex; flex-direction: column; background: linear-gradient(#5a4ab0, #3a2a88); border: 4px solid var(--ink); border-radius: 1.3rem; box-shadow: 0 0.4rem 0 var(--ink); overflow: hidden; }
+.panel header { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.7rem 0.55rem 1.1rem; background: linear-gradient(#8ae8ff, #2a9aff); border-bottom: 4px solid var(--ink); }
+.panel h2 { margin: 0; font-size: 1.9rem; font-weight: 700; }
+.panel .x { width: 2.6rem; height: 2.6rem; font-size: 1.3rem; padding: 0; }
+.panel .body { padding: 0.8rem 0.9rem 0.9rem; overflow-y: auto; display: grid; gap: 0.55rem; }
+.row-card { display: grid; grid-template-columns: 3rem 1fr auto; align-items: center; gap: 0.7rem; background: rgba(255, 255, 255, 0.12); border: 3px solid var(--ink); border-radius: 0.9rem; padding: 0.45rem 0.6rem; }
+.row-card.on { background: rgba(125, 255, 107, 0.22); }
+.row-card .ic { font-size: 2rem; text-align: center; }
+.row-card .nm { font-size: 1.15rem; font-weight: 700; line-height: 1.1; }
+.row-card .ds { font-size: 0.88rem; color: #e4dcff; }
+.row-card button { font-size: 1rem; padding: 0.4rem 0.7rem; min-width: 6.6rem; }
+.sec { font-size: 1.05rem; font-weight: 700; color: var(--yellow); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 0.2rem; }
+.note { margin: 0; font-size: 0.9rem; color: #e4dcff; }
+.rebirth-box { display: grid; gap: 0.7rem; text-align: center; }
+.rebirth-box .big { font-size: 2.5rem; font-weight: 700; }
+.rebirth-box .mult { display: flex; justify-content: center; align-items: center; gap: 1rem; font-size: 1.8rem; font-weight: 700; }
+.rebirth-box p { margin: 0; font-size: 1rem; color: #e4dcff; }
+.rebirth-box button { font-size: 1.5rem; padding: 0.6rem; }
+.rebirth-box .prog { position: relative; height: 1.6rem; background: rgba(0, 0, 0, 0.3); border: 3px solid var(--ink); border-radius: 1rem; overflow: hidden; }
+.rebirth-box .prog i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #ff5a5a, #ffd028); }
+.rebirth-box .prog span { position: relative; font-size: 0.95rem; font-weight: 700; line-height: 1.4rem; }
+.invite-row { display: flex; gap: 0.5rem; }
+.invite-row input { flex: 1; min-width: 0; font: 600 0.9rem var(--font); border: 2px solid var(--ink); border-radius: 0.5rem; padding: 0.35rem 0.5rem; background: #fff; color: var(--ink); }
+.invite-row .btn { font-size: 0.95rem; padding: 0.35rem 0.8rem; }
+.settings { display: grid; gap: 1rem; }
+.set-row { display: grid; grid-template-columns: 9rem 1fr; align-items: center; gap: 0.8rem; font-size: 1.15rem; font-weight: 700; }
+.set-row input[type=range] { width: 100%; accent-color: var(--green); height: 1.4rem; }
+.seg { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.seg .btn { font-size: 1rem; padding: 0.35rem 0.8rem; }
+
+/* Cards */
+.card { position: relative; width: min(25rem, 100%); display: grid; gap: 0.6rem; justify-items: center; text-align: center; padding: 1.1rem 1.2rem 1.2rem; background: linear-gradient(#ffffff, #ece8ff); color: var(--ink); border: 4px solid var(--ink); border-radius: 1.2rem; box-shadow: 0 0.4rem 0 var(--ink); }
+.card h2 { margin: 0; font-size: 2.1rem; color: #fff; }
+.card .x { position: absolute; right: -0.9rem; top: -0.9rem; width: 3rem; height: 3rem; padding: 0; font-size: 1.4rem; border-radius: 0.8rem; }
+.card .big-ic { font-size: 3.4rem; }
+.card .keep { font-size: 1.05rem; font-weight: 600; color: #3a2a5a; }
+.card .acts { display: flex; gap: 0.6rem; width: 100%; }
+.card .acts .btn { flex: 1; font-size: 1.3rem; padding: 0.45rem; }
+.card .cost { font-size: 1.5rem; font-weight: 700; }
+
+/* Daily Rewards (reference): seven cards, Day 7 the big SECRET Reward */
+.daily-pop { position: relative; width: min(34rem, 100%); padding: 0.4rem 0.7rem 0.8rem; background: #f4f2ff; border: 4px solid var(--ink); border-radius: 1rem; box-shadow: 0 0.4rem 0 var(--ink); color: var(--ink); }
+.daily-pop header { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem 0.5rem; }
+.daily-pop header .cal { font-size: 2rem; }
+.daily-pop h2 { margin: 0; font-size: 2rem; color: #fff; }
+.daily-pop .x { position: absolute; right: -0.9rem; top: -0.9rem; width: 2.8rem; height: 2.8rem; padding: 0; font-size: 1.3rem; border-radius: 0.6rem; }
+.daily-pop .cards { display: grid; grid-template-columns: repeat(3, 1fr) 1.25fr; grid-template-rows: 1fr 1fr; gap: 0.45rem; }
+.dcard { position: relative; display: grid; justify-items: center; align-content: space-between; gap: 0.1rem; background: linear-gradient(#a8f0ff, #4ac8f8); border: 3px solid var(--ink); border-radius: 0.5rem; padding: 0.15rem 0.15rem 0.25rem; min-height: 6.6rem; }
+.dcard.d7 { grid-column: 4; grid-row: 1 / 3; background: linear-gradient(135deg, #ff5a8a, #ffd028, #46ec50, #28c8ff, #c45aff); }
+.dcard .dn { font-size: 1.1rem; font-weight: 700; color: #fff; }
+.dcard .di { font-size: 2.2rem; line-height: 1; }
+.dcard.d7 .di { font-size: 4rem; }
+.dcard .dr { font-size: 0.85rem; font-weight: 700; color: #fff; line-height: 1.05; text-align: center; }
+.dcard .st { width: 90%; text-align: center; font-size: 0.95rem; font-weight: 700; border-radius: 0.35rem; border: 2px solid var(--ink); background: linear-gradient(#ff7a6a, #e8302a); color: #fff; }
+.dcard.today .st { background: linear-gradient(#8aff7a, #22c73a); cursor: pointer; }
+.dcard.done .st { background: linear-gradient(#8aff7a, #22c73a); }
+.dcard.done { filter: brightness(0.9); }
+.dcard.done::after { content: '✔'; position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); font-size: 3rem; color: #46ec50; text-shadow: 0 0 0.2rem #fff, 0 0.15rem 0 var(--ink); }
+.daily-pop .left { text-align: center; font-size: 1rem; font-weight: 700; margin-top: 0.45rem; color: #3a2a5a; }
+
+/* Start screen */
+#start { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 1rem; background: radial-gradient(ellipse at center, rgba(122, 160, 255, 0.5), rgba(30, 20, 70, 0.94)); }
+.loader { display: grid; justify-items: center; gap: 0.9rem; text-align: center; }
+.loader .logo { font-size: 3rem; font-weight: 700; line-height: 1; }
+.loader .logo b { color: var(--yellow); }
+.loader-chev { width: 5rem; height: 5rem; border-radius: 1rem; background: #ea001b; border: 4px solid var(--ink); display: grid; place-items: center; box-shadow: 0 0.35rem 0 var(--ink); animation: chevUp 1s cubic-bezier(0.5, 0, 0.5, 1) infinite; }
+.loader-chev svg { width: 70%; height: 70%; }
+@keyframes chevUp { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2rem); } }
+#loading { font-size: 1.3rem; font-weight: 700; }
+#playBtn { font-size: 1.4rem; padding: 0.45rem 1.6rem; }
+.err { color: #ffd0d0; font-size: 1.05rem; font-weight: 600; max-width: 28rem; }
+
+/* Phones and short screens */
+@media (max-width: 760px), (max-height: 520px) {
+    #leftCol { --tile: 4.3rem; top: 24%; }
+    .rbx .lb { font-size: 0.9rem; }
+    #winsCur { font-size: 2rem; } #winsCur .cupIc { width: 2.3rem; height: 2.3rem; }
+    #customSpeed { width: 8rem; } #customSpeed label { font-size: 1rem; } #speedInput { font-size: 1.4rem; } #customSpeed small { font-size: 1rem; }
+    #starter .gift { font-size: 2.8rem; }
+    #btn2x { font-size: 1.5rem; } #price2x { font-size: 1.1rem; }
+    #bottom { width: min(30rem, 54vw); }
+    #buyRow .btn .a { font-size: 1.2rem; }
+    #totalSpeed { font-size: 1.5rem; } #rebPct { font-size: 1rem; }
+    #levelBar { height: 2.2rem; } #levelBar span { font-size: 1.3rem; }
+    #stageTitle .n { font-size: 3.6rem; } #stageTitle .s { font-size: 1.5rem; }
+    #questBand { font-size: 1.5rem; height: 2.6rem; }
+    .ck button { width: 4rem; height: 4rem; font-size: 0.85rem; } #controls .grid { grid-template-columns: repeat(2, 4rem); }
+}
+@media (max-height: 460px) {
+    #leftCol { --tile: 3.6rem; gap: 0.3rem; }
+    #starter .t1, #starter .tm { display: none; }
+    #controls h4 { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .toast, .g-rainbow, .g-hot, #starter .gift, .loader-chev, #lvlBanner.show { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; }
+}
+</style>
+</head>
+<body class="tut">
+
+<div id="app">
+    <canvas id="view" tabindex="0" aria-label="Game view"></canvas>
+    <canvas id="speedLines" aria-hidden="true"></canvas>
+
+    <div id="hud" hidden>
+        <div id="flash" class="passive" aria-hidden="true"></div>
+
+        <!-- Tutorial band (the reference's "Get your first Win!") -->
+        <div id="questBand" class="passive"><span class="o" id="questTxt">Train on the treadmill! (0/10)</span></div>
+
+        <!-- Stage bar 1-9 with everyone's heads -->
+        <div id="stageBar" class="passive post-tut" aria-hidden="true"><div class="line"></div></div>
+        <div id="lvlBanner" class="o1"><span class="a" id="lvlA">Level 1 &gt; Level 2</span><span class="b" id="lvlB">Speed 10 &gt; Speed 12</span></div>
+
+        <!-- Top right: Invite and the speaker -->
+        <div id="topRight">
+            <button id="btnInvite" class="o1" aria-label="Invite friends"><span aria-hidden="true">😎</span>Invite!</button>
+            <button class="sq" id="btnSound" aria-label="Music on or off" title="Music">
+                <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M14 38 L34 38 L56 18 L56 82 L34 62 L14 62 Z" fill="#fff"/><path d="M68 34 Q80 50 68 66 M76 24 Q96 50 76 76" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>
+            </button>
+            <button class="sq" id="btnSettings" aria-label="Settings" title="Settings">
+                <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="30" fill="none" stroke="#fff" stroke-width="12" stroke-dasharray="12 8"/><circle cx="50" cy="50" r="14" fill="#fff"/></svg>
+            </button>
+        </div>
+
+        <!-- Left: Wins, TRAILS, REBIRTH, DAILY, Claim! -->
+        <div id="leftCol" class="post-tut">
+            <div id="winsCur" class="passive"><svg class="cupIc" viewBox="0 0 100 100" aria-hidden="true"><path d="M26 14 L74 14 L72 44 Q70 62 50 64 Q30 62 28 44 Z" fill="#ffc414" stroke="#1c1530" stroke-width="6" stroke-linejoin="round"/><path d="M28 22 Q8 22 12 38 Q16 50 30 50 M72 22 Q92 22 88 38 Q84 50 70 50" fill="none" stroke="#1c1530" stroke-width="6"/><rect x="42" y="62" width="16" height="14" fill="#ffc414" stroke="#1c1530" stroke-width="5"/><rect x="30" y="76" width="40" height="12" rx="3" fill="#e8202a" stroke="#1c1530" stroke-width="5"/><circle cx="24" cy="74" r="16" fill="#46ec50" stroke="#1c1530" stroke-width="5"/><path d="M24 64 L24 84 M14 74 L34 74" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg><b class="o" id="winsVal">0</b></div>
+            <div id="tiles">
+                <button class="rbx rb-trails" id="btnTrails" aria-label="Trails">
+                    <svg class="ic" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 8 Q72 34 66 54 Q84 44 80 26 Q98 52 84 76 Q72 94 50 94 Q24 94 16 72 Q10 52 26 38 Q26 54 36 58 Q28 30 50 8 Z" fill="#5a8cff" stroke="#1c1530" stroke-width="5" stroke-linejoin="round"/><path d="M50 40 Q62 58 56 70 Q50 82 42 74 Q34 62 50 40 Z" fill="#c8e8ff"/></svg>
+                    <span class="lb o1">TRAILS</span><span class="new o1">New!</span>
+                </button>
+                <button class="rbx rb-rebirth" id="btnRebirth" aria-label="Rebirth">
+                    <svg class="ic" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="36" fill="#fff" stroke="#1c1530" stroke-width="6"/><path d="M50 22 A28 28 0 1 1 22 50" fill="none" stroke="#e8202a" stroke-width="11" stroke-linecap="round"/><path d="M12 52 L22 38 L33 52 Z" fill="#e8202a" stroke="#1c1530" stroke-width="4" stroke-linejoin="round"/></svg>
+                    <span class="lb o1">REBIRTH</span>
+                </button>
+                <button class="rbx rb-daily" id="btnDaily" aria-label="Daily rewards">
+                    <svg class="ic" viewBox="0 0 100 100" aria-hidden="true"><rect x="12" y="18" width="76" height="70" rx="10" fill="#fff" stroke="#1c1530" stroke-width="6"/><path d="M12 28 Q12 18 22 18 L78 18 Q88 18 88 28 L88 40 L12 40 Z" fill="#e8304a" stroke="#1c1530" stroke-width="6" stroke-linejoin="round"/><text x="50" y="78" font-size="38" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#1c1530">31</text></svg>
+                    <span class="lb o1">DAILY</span><span class="badge o1" id="dailyBadge" hidden>!</span>
+                </button>
+                <button class="rbx rb-claim" id="btnClaim" aria-label="Free rewards">
+                    <svg class="ic" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 44 L86 44 L86 86 Q86 90 82 90 L18 90 Q14 90 14 86 Z" fill="#ff4a6a" stroke="#1c1530" stroke-width="6" stroke-linejoin="round"/><rect x="8" y="30" width="84" height="18" rx="4" fill="#ff7a8a" stroke="#1c1530" stroke-width="6"/><rect x="43" y="30" width="14" height="60" fill="#ffd028" stroke="#1c1530" stroke-width="5"/><path d="M50 30 Q30 6 22 22 Q18 32 50 30 Q82 32 78 22 Q70 6 50 30" fill="#ffd028" stroke="#1c1530" stroke-width="5" stroke-linejoin="round"/></svg>
+                    <span class="lb o1">Claim!</span><span class="badge o1" id="freeBadge" hidden>!</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Right: STARTER PACK, Custom Speed, x2 Speed -->
+        <div id="rightCol" class="post-tut">
+            <div id="rightTop">
+                <button id="starter" aria-label="Starter Pack">
+                    <span class="tm o1" id="starterTime">12:00:00</span>
+                    <span class="gift" aria-hidden="true">🎁</span>
+                    <span class="pr o1" id="starterPrice">🏆5</span>
+                    <span class="t1 o">STARTER PACK</span>
+                </button>
+                <div id="customSpeed">
+                    <label class="o1" for="speedInput">Custom Speed</label>
+                    <div class="row"><span class="pen" aria-hidden="true">✏️</span><input id="speedInput" type="number" inputmode="numeric" min="8" value="10" aria-label="Custom walk speed"></div>
+                    <small class="o1" id="maxSpeedTxt">MAX: 10</small>
+                </div>
+            </div>
+            <button class="btn g-rainbow" id="btn2x"><span class="bolt" aria-hidden="true">⚡</span><span class="o">x2 Speed</span></button>
+            <div class="o1" id="price2x">ONLY 🏆25</div>
+        </div>
+
+        <!-- Bottom: Total Speed / Rebirth %, the Level bar, +10k / +100k / +1M / +10M Speed -->
+        <div id="bottom">
+            <div id="statRow" class="passive">
+                <div id="totalSpeed" class="o">Total Speed: <b id="speedVal">0</b></div>
+                <div id="rebPct" class="o1">Rebirth: +0%</div>
+            </div>
+            <div id="levelBar" class="passive"><div class="rest"></div><div class="fill" id="xpFill"></div><span class="o" id="levelTxt">Level 1</span><span class="o" id="xpTxt">0/12</span></div>
+            <div id="buyRow">
+                <button class="btn g-yellow o1" data-pack="0"><span class="sh" aria-hidden="true">👟</span><span class="a o">+10k</span><span class="p">🏆 30</span></button>
+                <button class="btn g-yellow o1" data-pack="1"><span class="sh" aria-hidden="true">👟</span><span class="a o">+100k</span><span class="p">🏆 250</span></button>
+                <button class="btn g-rainbow o1" data-pack="2"><span class="sh" aria-hidden="true">👟</span><span class="a o">+1M</span><span class="p">🏆 2K</span></button>
+                <button class="btn g-hot o1" data-pack="3"><span class="sh" aria-hidden="true">👟</span><span class="a o">+10M Speed</span><span class="p">🏆 15K</span></button>
+            </div>
+        </div>
+
+        <!-- Bottom right: Controls -->
+        <div id="controls">
+            <button id="ctrlToggle" class="o" aria-label="Show or hide the controls">&gt;</button>
+            <h4 class="o1">Controls</h4>
+            <div class="grid">
+                <div class="ck"><span class="k o1">F</span><button id="ckSuper" class="o1" data-move="super">Super<br>Jump</button></div>
+                <div class="ck"><span class="k o1">E</span><button id="ckDash" class="o1" data-move="dash">Dash</button></div>
+                <div class="ck"><span class="k o1">C</span><button id="ckSlide" class="o1" data-move="slide">Slide</button></div>
+                <div class="ck"><span class="k o1">SPACE</span><button id="ckDouble" class="o1" data-move="jump">Double<br>Jump<small>(IN AIR)</small></button></div>
+            </div>
+        </div>
+
+        <button id="revive" hidden><span class="w l" aria-hidden="true">🪽</span><span class="q" id="reviveQ">Revive? (6.0)</span><span class="c o" id="reviveC">ONLY 🏆1</span><span class="w r" aria-hidden="true">🪽</span></button>
+
+        <div id="stageTitle" style="opacity:0"><div class="n" id="stageName">STAGE 1</div><div class="s o" id="stageSub"></div></div>
+        <div id="winPop" class="passive" hidden>
+            <div class="rays"></div>
+            <svg class="cup" viewBox="0 0 100 100" aria-hidden="true"><path d="M24 10 L76 10 L74 44 Q72 64 50 66 Q28 64 26 44 Z" fill="#ffc414" stroke="#1c1530" stroke-width="5" stroke-linejoin="round"/><path d="M28 14 L40 14 L38 50 Q36 58 32 52 Q28 40 28 14 Z" fill="#fff6b0" opacity="0.7"/><ellipse cx="50" cy="12" rx="24" ry="5" fill="#e8202a" stroke="#1c1530" stroke-width="4"/><path d="M26 20 Q4 20 8 38 Q12 52 28 52 M74 20 Q96 20 92 38 Q88 52 72 52" fill="none" stroke="#1c1530" stroke-width="5"/><path d="M26 20 Q8 22 12 37 Q16 48 28 48 M74 20 Q92 22 88 37 Q84 48 72 48" fill="none" stroke="#ffc414" stroke-width="3"/><rect x="42" y="64" width="16" height="14" fill="#ffc414" stroke="#1c1530" stroke-width="4"/><rect x="28" y="78" width="44" height="14" rx="3" fill="#ffb000" stroke="#1c1530" stroke-width="4"/></svg>
+            <div class="goal o">+1 WIN!</div><div class="sub o" id="winSub">Back to the lobby…</div>
+        </div>
+        <div id="toasts"></div>
+        <div id="tips" class="o1" hidden></div>
+        <div id="fps" class="o1 passive" hidden>60 FPS</div>
+        <div id="touch" hidden>
+            <div id="stick"><div id="knob"></div></div>
+            <button class="btn g-green o" id="jumpBtn">JUMP</button>
+        </div>
+    </div>
+
+    <!-- Panels: Trails, Rebirth, Claim (free rewards), Friends, Settings -->
+    <div id="modal" class="overlay" hidden>
+        <div class="panel" role="dialog" aria-labelledby="modalTitle">
+            <header><h2 class="o" id="modalTitle">Trails</h2><button class="btn g-red x o1" id="modalClose" aria-label="Close">✕</button></header>
+            <div class="body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Buy with Wins -->
+    <div id="confirm" class="overlay" hidden>
+        <div class="card" role="dialog" aria-labelledby="confirmTitle">
+            <button class="btn g-red x o" id="confirmClose" aria-label="Close">✕</button>
+            <div class="big-ic" id="confirmIc">🛒</div>
+            <h2 class="o" id="confirmTitle">Buy?</h2>
+            <div class="keep" id="confirmText">x5 Treadmill</div>
+            <div class="cost" id="confirmCost">🏆 15 Wins</div>
+            <div class="acts"><button class="btn g-green o" id="confirmYes">Buy</button><button class="btn g-grey o" id="confirmNo">Cancel</button></div>
+        </div>
+    </div>
+
+    <!-- Daily Rewards (reference): Day 1-6 and the SECRET Reward on Day 7 -->
+    <div id="daily" class="overlay" hidden>
+        <div class="daily-pop" role="dialog" aria-labelledby="dailyTitle">
+            <header><span class="cal" aria-hidden="true">📅</span><h2 class="o" id="dailyTitle">Daily Rewards</h2></header>
+            <button class="btn g-red x o" id="dailyClose" aria-label="Close">✕</button>
+            <div class="cards" id="dailyCards"></div>
+            <div class="left" id="dailyLeft">Your daily reward is ready!</div>
+        </div>
+    </div>
+
+    <div id="offline" class="overlay" hidden>
+        <div class="card" role="alertdialog" aria-labelledby="offlineTitle">
+            <h2 class="o" id="offlineTitle" style="color:#ff5a6a">Disconnected</h2>
+            <div class="keep">Lost connection to the server. Your progress is saved — rejoin to keep playing.</div>
+            <div class="acts"><button class="btn g-green o" id="reconnectBtn">Rejoin</button></div>
+        </div>
+    </div>
+
+    <div id="start">
+        <div class="loader">
+            <div class="loader-chev" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M50 12 L90 52 L90 80 L50 42 L10 80 L10 52 Z" fill="#fff"/></svg></div>
+            <div class="logo o">+1 Speed<br><b>Parkour Obby</b> Escape</div>
+            <div id="loading" class="o1">Loading…</div>
+            <div class="err o1" id="connectErr" hidden></div>
+            <button class="btn g-green o" id="playBtn" hidden>Try again</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://sdk.bloxity.io/v1/legion-sdk.min.js"></script>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
