@@ -75,7 +75,7 @@ export function lavaTexture(color) {
         const N = 256, c = canvas(N), x = c.getContext('2d'), rnd = seeded(7);
         x.fillStyle = css(color); x.fillRect(0, 0, N, N);
         for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
-            x.fillStyle = 'rgba(255,255,255,0.08)'; x.fillRect(i * 32 + 4, j * 32 + 4, 24, 24);
+            x.fillStyle = 'rgba(255,220,120,0.14)'; x.fillRect(i * 32 + 4, j * 32 + 4, 24, 24);
             x.fillStyle = 'rgba(120,20,0,0.18)'; x.fillRect(i * 32 + 4, j * 32 + 26, 24, 2);
         }
         x.strokeStyle = 'rgba(255,240,140,0.55)'; x.lineWidth = 3;

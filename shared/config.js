@@ -66,56 +66,70 @@ export function eventState(now) {
 }
 
 // =====================================================================================
-// The course: one long lavender hall north (+z) out of the lobby. Each stage is a run of obstacle
-// segments (as in the reference: climb walls, poles, wall runs over lava, Super Jump gaps, crushers,
-// Slide Under walls, pillars, Double Jump walls, lasers) and ends on a platform with two Wins pads:
-// yellow (+N, right) and purple (about 2N, left, across a lava gap). That platform is where the next stage
-// starts. Gaps are sized from the stage's recommended Speed with runSpeed().
+// The course: one long lavender hall north (+z) out of the lobby, laid out like the reference video.
+// Each stage is a run of obstacle segments and ends on a raised platform with two Wins pads: yellow
+// (+N) on the floor on the right and purple (about 2N) on a block on the left. That platform is where
+// the next stage starts. Gaps are sized from the stage's recommended Speed with runSpeed().
+//   Stage 1: climb wall right inside the door, run, swing on the pole up onto the platform
+//   Stage 2: blue glass wall run over spiked lava, landing, "Press Super Jump!" up onto the platform
+//   Stage 3: corridor of ceiling crushers with spikes along the sides, lava edges, stairs, wall run
+//   Stage 4: slide through the "STAGE 4 / Slide Under!" block, climb wall, step pyramid with a
+//            second Slide Under block, three Double Jump walls
+//   Stage 5: navy room of round pillars with sweeping red lasers (the video ends here)
+//   Stages 6-9 mix the same obstacles, harder
 // =====================================================================================
 export const HALL_W = 40;               // corridor width: x from -20 to 20
 export const LOBBY = { halfX: 86, z0: -100, z1: 44, wallHeight: 46, spawn: { x: 0, y: 0, z: -38 } };
 export const PLATFORM_LEN = 44;
 export const WALLRUN_HALF = 5.5;        // wall-run corridors are 11 wide (blue glass at x = +-5.5)
-// Stage platforms are rooms wider than the hall (x from -32 to 32). Pads: yellow on the right (-x),
-// purple on a block across a lava gap on the left (+x)
+export const TUNNEL_H = 3.2;            // Slide Under blocks: the gap under them
+// Stage platforms are rooms wider than the hall (x from -32 to 32). Pads: yellow on the floor on the
+// right (-x), purple on a raised block on the left (+x)
 export const PLAT_HALF = 32;
-export const PAD = { w: 8, d: 8, yellowX: -20, purpleX: PLAT_HALF - 5 };
+export const PAD = { w: 8, d: 8, yellowX: -20, purpleX: 20 };
 
 const S_ = (name, hint, need, wins, theme, segs) => ({ name, hint, need, wins, theme, segs });
 // Segments: [type, ...params]. Lengths come from the stage's need speed.
 export const STAGES = [
-    S_('Stage 1', 'Walk towards the wall to climb it!', 10, [1, 2], 'lavender', [['run', 46, 'lobbyHall'], ['climb', 30], ['run', 18, 'pole'], ['pole'], ['platform']]),
-    S_('Stage 2', 'Wall Run & Super Jump!', 24, [4, 10], 'lavender', [['run', 10], ['wallrun'], ['run', 16, 'super'], ['superjump'], ['platform']]),
-    S_('Stage 3', 'Dodge the Crushers!', 34, [8, 20], 'lavender', [['run', 14, 'tread'], ['crushers', 3], ['stairs', 8], ['wallrun'], ['slidebar'], ['platform']]),
-    S_('Stage 4', 'Slide Under!', 44, [12, 25], 'lavender', [['run', 10], ['slidewall'], ['run', 14], ['climb', 24], ['pillars', 3], ['run', 10], ['slidewall'], ['platform']]),
-    S_('Stage 5', 'Double Jump!', 54, [15, 30], 'lavender', [['run', 12], ['dbjump', 4], ['run', 8], ['superjump'], ['platform']]),
-    S_('Stage 6', 'Laser Pillars!', 66, [30, 65], 'night', [['run', 12], ['lasers', 4], ['run', 12], ['wallrun'], ['platform']]),
-    S_('Stage 7', 'Swing & Crush!', 80, [60, 130], 'dusk', [['run', 14, 'pole'], ['pole'], ['crushers', 4], ['wallrun', 'zig'], ['run', 14, 'pole'], ['pole'], ['platform']]),
-    S_('Stage 8', 'Dash Across!', 96, [125, 260], 'neon', [['run', 14, 'super'], ['superjump'], ['run', 12], ['pillars', 2], ['run', 10], ['lasers', 2], ['run', 10], ['slidewall'], ['platform']]),
-    S_('Stage 9', 'Final Escape!', 115, [250, 500], 'gold', [['run', 12], ['climb', 36], ['run', 10], ['wallrun', 'zig'], ['dbjump', 3], ['run', 14, 'super'], ['superjump'], ['finale']]),
+    S_('Stage 1', 'Walk towards the wall to climb it!', 10, [1, 2], 'lavender',
+        [['run', 22, 'door'], ['climb', 36], ['run', 26, 'pole'], ['pole', 5], ['platform', 3.5]]),
+    S_('Stage 2', 'Wall Run & Super Jump!', 24, [4, 10], 'lavender',
+        [['run', 4], ['wallrun'], ['run', 12, 'super'], ['superjump', 6], ['platform', 6]]),
+    S_('Stage 3', 'Dodge the Crushers!', 34, [8, 20], 'lavender',
+        [['run', 8], ['crushers', 3], ['edgeLava', 16], ['stairs', 4.5], ['wallrun'], ['platform', 6]]),
+    S_('Stage 4', 'Slide Under!', 44, [15, 30], 'lavender',
+        [['tunnel', 12, 'stage'], ['run', 30], ['climb', 36], ['run', 10], ['pyramid'], ['dbjump', 3], ['platform', 6]]),
+    S_('Stage 5', 'Laser Pillars!', 54, [30, 65], 'lavender',
+        [['run', 8], ['pillarRoom', 4], ['run', 22, 'super'], ['superjump', 6], ['platform', 6]]),
+    S_('Stage 6', 'Crusher Run!', 66, [60, 130], 'night',
+        [['run', 8], ['crushers', 4], ['edgeLava', 14], ['wallrun', 'zig'], ['run', 22, 'pole'], ['pole', 5], ['platform', 6]]),
+    S_('Stage 7', 'Slide & Climb!', 80, [125, 260], 'dusk',
+        [['tunnel', 12, 'stage'], ['run', 24], ['climb', 42], ['run', 10], ['pyramid'], ['dbjump', 4], ['platform', 6]]),
+    S_('Stage 8', 'Dash Across!', 96, [250, 500], 'neon',
+        [['run', 8], ['pillarRoom', 5], ['run', 22], ['wallrun'], ['run', 12, 'super'], ['superjump', 6], ['platform', 6]]),
+    S_('Stage 9', 'Final Escape!', 115, [500, 1000], 'gold',
+        [['run', 10], ['climb', 44], ['run', 10], ['wallrun', 'zig'], ['crushers', 3], ['dbjump', 3], ['run', 12, 'super'], ['superjump', 6], ['finale']]),
 ];
-export const ESCAPE = { wins: 1000 };
+export const ESCAPE = { wins: 2500 };
 
 // Stage looks: floor / walls / trims / sky haze / lava. The first five are the reference's lavender
-// hall; the higher stages get darker, then golden
+// hall (colours sampled from the video); the higher stages get darker, then golden
 export const THEMES = {
-    lavender: { floor: 0x9a88cf, wall: 0xb9a6e6, trim: 0xd8ccff, pillar: 0xe2dafc, sky: 0xcfc4ff, lava: 0xff8a1e, accent: 0x6fd8ff },
-    night: { floor: 0x2a3a78, wall: 0x22306a, trim: 0x4a6ad8, pillar: 0x3a4a90, sky: 0x2a2a6a, lava: 0xff3a5a, accent: 0xff3a5a },
-    dusk: { floor: 0xb87ab8, wall: 0xc88ac0, trim: 0xffc0e0, pillar: 0xf0d0f0, sky: 0xffb8d8, lava: 0xff6a1e, accent: 0xff6ad8 },
-    neon: { floor: 0x2a1e4e, wall: 0x1e1638, trim: 0x2affd8, pillar: 0x3a2a6a, sky: 0x4a3a9a, lava: 0xff2ad0, accent: 0x2affd8 },
-    gold: { floor: 0xe8c86a, wall: 0xf0d890, trim: 0xffffff, pillar: 0xfff4d0, sky: 0xffe8a8, lava: 0xff5a1e, accent: 0xffd028 },
+    lavender: { floor: 0x8a7abc, wall: 0xa08ed0, trim: 0xd8ccf6, pillar: 0xc4b6ec, sky: 0xb4a8ec, lava: 0xff7000, accent: 0x6fd8ff },
+    night: { floor: 0x24306a, wall: 0x1e2a5e, trim: 0x4a6ad8, pillar: 0x34428a, sky: 0x2a2a6a, lava: 0xff3a5a, accent: 0xff3a5a },
+    dusk: { floor: 0x9a5aa0, wall: 0xa86aa8, trim: 0xffb0d8, pillar: 0xd8a8dc, sky: 0xf0a0c8, lava: 0xff6a1e, accent: 0xff6ad8 },
+    neon: { floor: 0x261a46, wall: 0x1c1434, trim: 0x2affd8, pillar: 0x342864, sky: 0x4a3a9a, lava: 0xff2ad0, accent: 0x2affd8 },
+    gold: { floor: 0xc8a448, wall: 0xd4b464, trim: 0xfff0c0, pillar: 0xf0dca0, sky: 0xffe0a0, lava: 0xff5a1e, accent: 0xffd028 },
 };
 
 // ----- gap sizes from the stage's need speed (see main.js for the moves) -----
 const G = (need) => runSpeed(need);
-export const PILLAR = 10;            // pillar tops are 10 x 10
+export const PILLAR_R = 4.5;           // round pillars in the pillar rooms
 export const GAPS = {
-    pole: (need) => Math.round(18 + Math.max(0, G(need) - 30) * 0.4),     // pole launch is mostly fixed
+    pole: () => 16,                                                         // the pole throws you about 22 studs
     wallrun: (need) => Math.round(2.0 * G(need)),                          // ~2.4 s of wall running
-    superjump: (need) => Math.round(1.2 * G(need)),                        // Super Jump + Double Jump
-    pillar: (need) => Math.round(0.6 * G(need)),                           // Double Jump between pillars
-    laser: (need) => Math.round(0.55 * G(need)),
-    purple: (need) => Math.round(Math.min(20, Math.max(6, 0.45 * G(need)))),
+    superjump: (need) => Math.round(1.0 * G(need)),                        // Super Jump + Double Jump, up 6
+    pillar: (need) => Math.round(0.42 * G(need)),                          // a jump between pillars, over the laser
 };
 const SEG_LEN = {
     run: (s, p) => p[1],
@@ -123,17 +137,18 @@ const SEG_LEN = {
     pole: (s) => GAPS.pole(s.need),
     wallrun: (s) => GAPS.wallrun(s.need) + 8,
     superjump: (s) => GAPS.superjump(s.need),
-    crushers: (s, p) => 14 + p[1] * 26,
-    stairs: (s, p) => Math.ceil(p[1] / 1.5) * 2.4,
-    slidebar: () => 10,
-    slidewall: () => 6,
-    pillars: (s, p) => (p[1] + 1) * GAPS.pillar(s.need) + p[1] * PILLAR,
-    dbjump: (s, p) => p[1] * 20 + 4,
-    lasers: (s, p) => (p[1] + 1) * GAPS.laser(s.need) + p[1] * 9,
+    crushers: (s, p) => 10 + p[1] * 26,
+    edgeLava: (s, p) => p[1],
+    stairs: (s, p) => Math.ceil(p[1] / 1.5) * 3,
+    tunnel: (s, p) => p[1],
+    pyramid: () => 3 * 4 + 12 + 6,
+    dbjump: (s, p) => p[1] * 24 + 6,
+    pillarRoom: (s, p) => (p[1] + 1) * GAPS.pillar(s.need) + p[1] * PILLAR_R * 2,
     platform: () => PLATFORM_LEN,
     finale: () => 90,
 };
-const SEG_RISE = { climb: (p) => p[1], stairs: (p) => p[1] };
+// How much higher the floor is after a segment (the platform's own pad block is separate)
+const SEG_RISE = { climb: (p) => p[1], stairs: (p) => p[1], pole: (p) => p[1], superjump: (p) => p[1] };
 
 {
     let z = LOBBY.z1, y = 0;
@@ -153,10 +168,10 @@ const SEG_RISE = { climb: (p) => p[1], stairs: (p) => p[1] };
         s.platform = { z0: pf.z0, z1: pf.z1, y: pf.y0 };
         s.spawn = { x: 0, y: pf.y0, z: pf.z0 + (pf.k === 'finale' ? 20 : 10) };
         if (pf.k === 'platform') {
-            const pz = pf.z0 + 16, gap = GAPS.purple(s.need);
+            const pz = pf.z0 + 9, block = pf.p[1] || 6;
             s.pads = [
                 { k: 0, x: PAD.yellowX, y: pf.y0, z: pz, wins: s.wins[0] },
-                { k: 1, x: PAD.purpleX, y: pf.y0, z: pz, wins: s.wins[1], gap },
+                { k: 1, x: PAD.purpleX, y: pf.y0 + block, z: pz, wins: s.wins[1], block },
             ];
         } else s.pads = [];
     });
@@ -202,10 +217,11 @@ export const TREAD_SPOTS = [];
 {
     ['n', 'n', 'n', 'n', 'r1', 'r3'].forEach((id, k) => TREAD_SPOTS.push({ id, x: -32 - k * 8.5, z: -22, y: 0, zone: -1 }));
     ['x5', 'x10', 'x25', 'x100', 'x1000'].forEach((id, k) => TREAD_SPOTS.push({ id, x: -34 - k * 10, z: -64, y: 0, zone: -1 }));
-    const per = [['n', 'x5'], ['n', 'x25'], ['n', 'x10'], ['n', 'x25'], ['n', 'x100'], ['n', 'x100'], ['n', 'x1000'], ['n', 'x1000']];
+    const per = [['x5', 'n'], ['x25', 'n'], ['x10', 'n'], ['x100', 'n'], ['x100', 'n'], ['x1000', 'n'], ['x1000', 'n'], ['x1000', 'n']];
     STAGES.forEach((s, i) => {
         if (!per[i]) return;
-        per[i].forEach((id, k) => TREAD_SPOTS.push({ id, x: -26 + k * 8, z: s.platform.z0 + 32, y: s.platform.y, zone: i }));
+        // The paid one on the left behind the purple pad, a TRAIN HERE one on the right (as in the reference)
+        per[i].forEach((id, k) => TREAD_SPOTS.push({ id, x: k ? -14 : 12, z: s.platform.z0 + 27, y: s.platform.y, zone: i }));
     });
 }
 export function treadmillAt(x, y, z) {

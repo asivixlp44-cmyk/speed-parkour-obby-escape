@@ -12,7 +12,7 @@ import {
 import { emitTread } from './fx.js';
 import { S, actions, net } from './state.js';
 import {
-    CFG, LOBBY, STAGES, HALL_W, PLAT_HALF, PAD, WALLRUN_HALF, PILLAR, THEMES, TREAD, TREAD_SPOTS, treadById, ownsTread,
+    CFG, LOBBY, STAGES, HALL_W, PLAT_HALF, PAD, WALLRUN_HALF, PILLAR_R, GAPS, TUNNEL_H, THEMES, TREAD, TREAD_SPOTS, treadById, ownsTread,
     SHOES, OP_SHOES, FINALE, ESCAPE, fmt, rngFrom, eventState, maxSpeedFor,
 } from '../../shared/config.js';
 
@@ -21,8 +21,8 @@ const LX = LOBBY.halfX, LZ0 = LOBBY.z0, LZ1 = LOBBY.z1;
 export const SPAWN = new V3(LOBBY.spawn.x, LOBBY.spawn.y, LOBBY.spawn.z);
 // The reference's palette (sampled from the video)
 const C = {
-    floor: 0x9a88cf, wall: 0xb9a6e6, wallDark: 0x8e7ab7, pillar: 0xe2dafc, trim: 0xd8ccff,
-    red: 0xea001b, cyan: 0x68d2fd, navy: 0x1a2a6a, navyDeep: 0x06205d, spike: 0x7a6cb0,
+    floor: 0x8a7abc, wall: 0xa08ed0, wallDark: 0x7a68ae, pillar: 0xc4b6ec, trim: 0xd8ccf6,
+    red: 0xea001b, cyan: 0x68d2fd, navy: 0x1a2a6a, navyDeep: 0x0a1c56, spike: 0x5a5090,
     yellow: 0xfeda20, purple: 0xc81cff, frame: 0x8985c7, belt: 0x36396b, white: 0xf4f2ff,
 };
 
@@ -79,7 +79,7 @@ function studBox(zone, sx, sy, sz, x, y, z, color, o) {
     const faces = [[sz, sy], [sz, sy], [sx, sz], [sx, sz], [sx, sy], [sx, sy]];
     for (let f = 0; f < 6; f++) for (let v = 0; v < 4; v++) {
         const i = f * 4 + v;
-        uv.setXY(i, uv.getX(i) * faces[f][0] / 16, uv.getY(i) * faces[f][1] / 16);
+        uv.setXY(i, uv.getX(i) * faces[f][0] / 12, uv.getY(i) * faces[f][1] / 12);
     }
     g.translate(x, y, z);
     addGeo(zone, g, studMaterial(color, { rough: o.rough ?? 0.42 }), o.cast);
@@ -135,7 +135,8 @@ function lavaMat(color) {
     let m = lavaMats.get(color);
     if (!m) {
         const tex = lavaTexture(color);
-        m = new T.MeshStandardMaterial({ map: tex, emissive: new T.Color(color), emissiveIntensity: 0.55, emissiveMap: tex, roughness: 0.5 });
+        // Unlit, so it keeps its hot orange under any light (tone mapping would wash it out)
+        m = new T.MeshBasicMaterial({ map: tex, toneMapped: false });
         lavaMats.set(color, m);
         if (!scrolling.some((s) => s.tex === tex)) scrolling.push({ tex, u: 0.02, v: 0.05 });
     }
@@ -312,7 +313,7 @@ function buildLobby() {
     // Floor
     floor(Z, -LX, LX, LZ0, LZ1, 0, C.floor);
     // Cyan arrow carpet from behind the spawn to the Stage 1 door (reference)
-    carpetMat = new T.MeshStandardMaterial({ map: carpetTexture(), roughness: 0.4, emissive: 0x2a7ab0, emissiveIntensity: 0.25 });
+    carpetMat = new T.MeshStandardMaterial({ map: carpetTexture(), roughness: 0.45, emissive: 0x2a7ab0, emissiveIntensity: 0.1 });
     const carpet = new T.Mesh(uvPlane(24, LZ1 - (SPAWN.z - 14), 12, 12), carpetMat);
     carpet.rotation.x = -Math.PI / 2; carpet.position.set(0, 0.05, (LZ1 + SPAWN.z - 14) / 2); carpet.receiveShadow = true; g.add(carpet);
     // Spawn pad: white with the black star
@@ -348,7 +349,7 @@ function buildLobby() {
     buildPortal(Z);
     buildLobbyTreads(Z);
     buildWinsShop(Z);
-    sign(Z, [{ t: 'Jump twice to' }, { t: 'Double Jump!' }], 13, 5.6, new V3(-30, 9, LZ1 - 1.2), Math.PI, 0.05);
+    sign(Z, [{ t: 'Jump twice to' }, { t: 'Double Jump!' }], 13, 5.6, new V3(30, 9, LZ1 - 1.2), Math.PI, 0.05);
 }
 
 // ----- leaderboards: Top Speed (blue), Top Wins (gold), Top Rebirths (purple), as in the reference -----
@@ -591,63 +592,117 @@ export function updateLobbySigns() { drawEventBoard(); }
 // =====================================================================================
 export const poles = [];          // { x0, x1, y, z, zone }
 export const checkpoints = [];    // stage platform spawns
-const sideWalls = (Z, s, z0, z1, yLow, yHigh, half) => {
+const sideWalls = (Z, s, z0, z1, yLow, yHigh, half, color) => {
     const th = THEMES[s.theme], len = z1 - z0;
     if (len <= 0) return;
-    for (const side of [-1, 1]) studBox(Z, 2, yHigh - yLow, len, side * ((half || HW) + 1), (yHigh + yLow) / 2, (z0 + z1) / 2, th.wall);
+    for (const side of [-1, 1]) studBox(Z, 2, yHigh - yLow, len, side * ((half || HW) + 1), (yHigh + yLow) / 2, (z0 + z1) / 2, color ?? th.wall);
 };
-// Pillars along the hall walls every ~28 studs (reference: tall lighter columns)
+// Pillars along the hall walls every ~28 studs (reference: tall lighter columns with a darker band)
 function hallPillars(Z, s, z0, z1, yLow, yHigh) {
     const th = THEMES[s.theme];
-    for (let z = z0 + 12; z < z1 - 6; z += 28) for (const side of [-1, 1]) studBox(Z, 3, yHigh - yLow, 5, side * (HW - 0.5), (yHigh + yLow) / 2, z, th.pillar, { solid: false });
+    for (let z = z0 + 12; z < z1 - 6; z += 28) for (const side of [-1, 1]) {
+        studBox(Z, 3, yHigh - yLow, 5, side * (HW - 0.5), (yHigh + yLow) / 2, z, th.pillar, { solid: false });
+        studBox(Z, 3.4, 2, 5.4, side * (HW - 0.5), yHigh - 6, z, shade(th.pillar, 0.75), { solid: false });
+    }
 }
 
-// The stage gate at the start of each stage: a frame across the hall with a navy board:
-// "STAGE 4 / Slide Under! / ⚡ 44 Speed" (the reference's signs, plus the speed it takes)
-function stageGate(s, z, y) {
-    const Z = s.i > 0 ? s.i - 1 : 0, th = THEMES[s.theme];
-    const stripe = stripeTexture(0x16121f, 0xffd028, 4);
-    const sm = new T.MeshStandardMaterial({ map: stripe, roughness: 0.4 });
-    for (const sx of [-1, 1]) roundBox(Z, 2.4, 24, 2.4, sx * (HW - 1.2), y + 12, z, candy(C.pillar, { rough: 0.35 }), 0.4);
-    const bar = new T.Mesh(new T.BoxGeometry(HALL_W, 2, 2.6), sm); bar.position.set(0, y + 25, z); zoneGroup(Z).add(bar);
-    const p = canvasPlane(Z, 18, 8.4, 900, 420, new V3(0, y + 19.6, z - 1.4), Math.PI);
-    roundBox(Z, 19, 9.4, 1.4, 0, y + 19.6, z, candy(C.navyDeep, { rough: 0.35 }), 0.4);
+// The navy stage board ("STAGE 4 / Slide Under! / ⚡ 44 Speed"): the reference's stage signs, plus
+// the Speed the stage is made for (green once you have it)
+function gateBoard(Z, s, w, h, pos, yaw) {
+    const th = THEMES[s.theme];
+    const p = canvasPlane(Z, w, h, 1024, Math.round(1024 * h / w), pos, yaw);
     const draw = (ok) => {
         const x = p.cv.getContext('2d'), W = p.cv.width, H = p.cv.height;
         x.fillStyle = '#0b1640'; x.fillRect(0, 0, W, H);
         x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
-        x.font = '800 140px Montserrat, Fredoka, sans-serif'; x.lineWidth = 18; x.strokeStyle = '#000'; x.strokeText(s.name.toUpperCase(), W / 2, 120);
-        x.fillStyle = '#ffffff'; x.fillText(s.name.toUpperCase(), W / 2, 120);
-        let px = 74; x.font = `700 ${px}px Fredoka, sans-serif`;
-        while (x.measureText(s.hint).width > W - 60 && px > 30) { px -= 4; x.font = `700 ${px}px Fredoka, sans-serif`; }
-        x.fillStyle = css(lighten(th.accent, 0.3)); x.fillText(s.hint, W / 2, 252);
-        x.font = '700 60px Fredoka, sans-serif';
+        let px = Math.round(H * 0.34);
+        x.font = `800 ${px}px Montserrat, Fredoka, sans-serif`;
+        while (x.measureText(s.name.toUpperCase()).width > W - 60 && px > 30) { px -= 4; x.font = `800 ${px}px Montserrat, Fredoka, sans-serif`; }
+        x.lineWidth = px * 0.14; x.strokeStyle = '#000'; x.strokeText(s.name.toUpperCase(), W / 2, H * 0.3);
+        x.fillStyle = '#ffffff'; x.fillText(s.name.toUpperCase(), W / 2, H * 0.3);
+        let sp = Math.round(H * 0.17); x.font = `700 ${sp}px Fredoka, sans-serif`;
+        while (x.measureText(s.hint).width > W - 60 && sp > 20) { sp -= 4; x.font = `700 ${sp}px Fredoka, sans-serif`; }
+        x.fillStyle = css(lighten(th.accent, 0.3)); x.fillText(s.hint, W / 2, H * 0.6);
+        x.font = `700 ${Math.round(H * 0.14)}px Fredoka, sans-serif`;
         x.fillStyle = ok ? '#7dff6b' : '#ff5a5a';
-        x.fillText('⚡ ' + s.need + ' Speed', W / 2, 352);
+        x.fillText('⚡ ' + s.need + ' Speed', W / 2, H * 0.83);
         p.tex.needsUpdate = true;
     };
     draw(false);
     shopItems.push({ kind: 'gate', def: s, redraw: draw, sig: '' });
 }
+// The gate at the far end of a stage platform: a navy board on a frame with a yellow-black striped
+// top bar (as in the reference)
+function stageGate(s, z, y, Z) {
+    const stripe = stripeTexture(0x16121f, 0xffd028, 4);
+    const sm = new T.MeshStandardMaterial({ map: stripe, roughness: 0.4 });
+    for (const sx of [-1, 1]) studBox(Z, 3, 26, 3, sx * (HW - 1.5), y + 13, z, C.pillar, { cast: false });
+    const bar = new T.Mesh(new T.BoxGeometry(HALL_W, 2.4, 3), sm); bar.position.set(0, y + 25, z); zoneGroup(Z).add(bar);
+    roundBox(Z, 20, 10.4, 1.4, 0, y + 18.2, z, candy(C.navyDeep, { rough: 0.35 }), 0.4);
+    gateBoard(Z, s, 19, 9.4, new V3(0, y + 18.2, z - 0.75), Math.PI);
+}
+
+// A navy block across the hall with a low gap under it: Slide Under! (deep enough that you slide
+// right through it). `board`: the stage it starts, shown on its face like the reference's STAGE 4.
+function slideBlock(Z, x0, x1, z0, z1, y, top, board, text) {
+    const h = top - (y + TUNNEL_H);
+    studBox(Z, x1 - x0, h, z1 - z0, (x0 + x1) / 2, y + TUNNEL_H + h / 2, (z0 + z1) / 2, C.navyDeep);
+    // Dark inside the tunnel, a cyan strip along its lip
+    plainBox(Z, x1 - x0 - 0.2, 0.2, z1 - z0 - 0.2, (x0 + x1) / 2, y + TUNNEL_H - 0.1, (z0 + z1) / 2, mat(0x060a1e));
+    glowBox(Z, x1 - x0, 0.3, 0.3, (x0 + x1) / 2, y + TUNNEL_H + 0.15, z0 - 0.2, 0x5ad8ff, 1.6);
+    if (board) gateBoard(Z, board, 26, 12, new V3((x0 + x1) / 2, y + TUNNEL_H + 9, z0 - 0.08), Math.PI);
+    else bigText(Z, text || '⬇ Slide Under! ⬇', Math.min(30, x1 - x0 - 2), new V3((x0 + x1) / 2, y + TUNNEL_H + 3.6, z0 - 0.1), Math.PI, ['#ffffff', '#e0f0ff']);
+}
+
+// ----- crushers: yellow-black striped blocks on white pistons, slamming onto a red zone -----
+function crusher(Z, z, y, w, d, period, phase) {
+    const stripe = stripeTexture(0x16121f, 0xffd028, 5).clone(); stripe.needsUpdate = true; stripe.repeat.set(5, 1);
+    const sideM = new T.MeshStandardMaterial({ map: stripe, roughness: 0.4 });
+    const grp = new T.Group(); zoneGroup(Z).add(grp);
+    const block = new T.Mesh(new T.BoxGeometry(w, 3.2, d), [sideM, sideM, mat(0x2a2440), mat(0x2a2440), sideM, sideM]);
+    block.castShadow = true; grp.add(block);
+    const rod = new T.Mesh(new T.CylinderGeometry(0.9, 0.9, 30, 14), candy(0xf4f2ff, { rough: 0.3 }));
+    rod.position.y = 16.6; grp.add(rod);
+    // Mount on the ceiling beam
+    studBox(Z, HALL_W, 3, 6, 0, y + 31.5, z, C.navyDeep, { solid: false });
+    const red = new T.Mesh(new T.PlaneGeometry(w + 2, d + 2), mat(0xe8202a));
+    red.rotation.x = -Math.PI / 2; red.position.set(0, y + 0.05, z); red.receiveShadow = true; zoneGroup(Z).add(red);
+    const kb = killBox(Z, 'crusher');
+    hz(Z, (t) => {
+        const c = cyc(t, period, phase) * period;
+        // up 1.2 s, shake 0.4 s, slam 0.14 s, stay down 0.4 s, rise
+        let h;
+        if (c < 1.2) h = 12;
+        else if (c < 1.6) h = 12 + Math.sin(c * 50) * 0.18;
+        else if (c < 1.74) h = 12 * (1 - (c - 1.6) / 0.14);
+        else if (c < 2.14) h = 0;
+        else h = Math.min(12, 12 * (c - 2.14) / Math.max(0.3, period - 2.14));
+        grp.position.set(0, y + h + 1.6, z);
+        red.material = c >= 1.2 && c < 2.14 ? mat(0xff2a3a) : mat(0xc8202a);
+        kb.active = h < 4.8;
+        kb.min.set(-w / 2, y + h - 0.2, z - d / 2); kb.max.set(w / 2, y + h + 3.2, z + d / 2);
+    });
+}
 
 // ----- segments -----
 const SEG = {
-    run(s, g, Z, rng) {
+    run(s, g, Z) {
         floor(Z, -HW, HW, g.z0, g.z1, g.y0, THEMES[s.theme].floor);
         const tag = g.p[2];
-        if (tag === 'lobbyHall') {
-            sign(Z, [{ t: 'Walk towards' }, { t: 'the wall to' }, { t: 'climb it!' }], 11, 7, new V3(-HW + 0.6, g.y0 + 8, g.z1 - 14), Math.PI / 2, -0.06);
-            sign(Z, [{ t: 'Jump twice to' }, { t: 'Double Jump!' }], 12, 5.4, new V3(HW - 0.6, g.y0 + 8, g.z0 + 16), -Math.PI / 2, 0.05);
+        if (tag === 'door') {
+            // The free-standing sign by the climbing wall (reference)
+            roundBox(Z, 0.5, 6, 0.5, -11, g.y0 + 3, g.z1 - 5, candy(0x6a5a9a), 0.2);
+            sign(Z, [{ t: 'Walk towards' }, { t: 'the wall to' }, { t: 'climb it!' }], 9, 6, new V3(-11, g.y0 + 8, g.z1 - 5.3), Math.PI + 0.35, 0.08);
         } else if (tag === 'pole') {
-            sign(Z, [{ t: 'Touch the' }, { t: 'pole to swing!' }], 12, 6, new V3(HW - 0.6, g.y0 + 8, g.z0 + 8), -Math.PI / 2, 0.06);
+            sign(Z, [{ t: 'Touch the' }, { t: 'pole to swing!' }], 12, 6, new V3(HW - 0.6, g.y0 + 9, g.z0 + 6), -Math.PI / 2, -0.06);
         } else if (tag === 'super') {
-            sign(Z, [{ t: 'Press' }, { t: 'Super Jump!' }], 12, 6.4, new V3(-HW + 4, g.y0 + 8, g.z1 - 3), Math.PI - 0.5, -0.06);
+            roundBox(Z, 0.5, 6, 0.5, 11, g.y0 + 3, g.z1 - 3, candy(0x6a5a9a), 0.2);
+            sign(Z, [{ t: 'Press' }, { t: 'Super Jump!' }], 10, 5.6, new V3(11, g.y0 + 8, g.z1 - 3.3), Math.PI - 0.4, -0.08);
         }
-        void rng;
     },
     climb(s, g, Z) {
         const H = g.y1 - g.y0, th = THEMES[s.theme];
-        // The wall block: lavender sides, red chevron panel in the middle (the only climbable part)
+        // The wall block: lavender sides, the red chevron panel in the middle (the climbable part)
         studBox(Z, 8, H, g.z1 - g.z0, -HW + 4, g.y0 + H / 2, (g.z0 + g.z1) / 2, th.wall);
         studBox(Z, 8, H, g.z1 - g.z0, HW - 4, g.y0 + H / 2, (g.z0 + g.z1) / 2, th.wall);
         studBox(Z, 24, H, g.z1 - g.z0, 0, g.y0 + H / 2, (g.z0 + g.z1) / 2, C.red, { solid: false });
@@ -655,20 +710,20 @@ const SEG = {
         const m = new T.Mesh(uvPlane(24, H, 24, 24), chevMat);
         m.position.set(0, g.y0 + H / 2, g.z0 - 0.06); m.rotation.y = Math.PI;
         zoneGroup(Z).add(m);
-        // White frame round the climb panel
-        for (const sx of [-1, 1]) roundBox(Z, 1, H, 1, sx * 12.4, g.y0 + H / 2, g.z0 - 0.3, candy(0xffffff, { rough: 0.3 }), 0.3);
+        // White edge along the top (reference)
+        roundBox(Z, 24, 1, 1.2, 0, g.y1 - 0.5, g.z0 - 0.4, candy(0xffffff, { rough: 0.3 }), 0.3);
         roundBox(Z, HALL_W, 1.2, g.z1 - g.z0 + 0.6, 0, g.y1 + 0.2, (g.z0 + g.z1) / 2, candy(th.trim, { rough: 0.3 }), 0.4);
     },
+    // A white pole across the hall over a lava gap: touch it and you swing round it up onto the
+    // platform beyond (which is higher)
     pole(s, g, Z) {
-        const th = THEMES[s.theme], len = g.z1 - g.z0, lavaY = g.y0 - 5;
+        const th = THEMES[s.theme], lavaY = g.y0 - 5;
         lava(Z, -HW, HW, g.z0, g.z1, lavaY, th.lava);
         const z = g.z0 + 4, y = g.y0 + 6.6;
         const pole = new T.Mesh(new T.CylinderGeometry(0.45, 0.45, HALL_W, 16), candy(0xffffff, { rough: 0.25, clear: true }));
         pole.rotation.z = Math.PI / 2; pole.position.set(0, y, z); pole.castShadow = true; zoneGroup(Z).add(pole);
         for (const sx of [-1, 1]) roundBox(Z, 1.6, 1.6, 1.6, sx * (HW - 0.6), y, z, candy(0x2a2a3a, { rough: 0.3 }), 0.3);
         poles.push({ x0: -HW + 1, x1: HW - 1, y, z, zone: Z, mesh: pole });
-        // The gap's far lip
-        void len;
     },
     wallrun(s, g, Z, rng) {
         const th = THEMES[s.theme], lavaY = g.y0 - 5, a = g.z0 + 4, b = g.z1 - 4, H = 26, wH = WALLRUN_HALF;
@@ -681,130 +736,115 @@ const SEG = {
             studBox(Z, HW - wH, H + 6, b - a, side * (wH + (HW - wH) / 2), g.y0 + H / 2 - 3, (a + b) / 2, th.wall, { solid: false });
             solid(Z, side * (wH + (HW - wH) / 2), g.y0 + H / 2 - 3, (a + b) / 2, HW - wH, H + 6, b - a, { wallrun: side });
             const m = new T.Mesh(uvPlane(b - a, H, 16, 16), glassMat);
-            m.position.set(side * (wH + 0.05), g.y0 + H / 2 - 4, (a + b) / 2); m.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+            m.position.set(side * (wH - 0.05), g.y0 + H / 2 - 4, (a + b) / 2); m.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
             zoneGroup(Z).add(m);
-            roundBox(Z, 1, 1, b - a, side * (wH + 0.3), g.y0 + H - 4, (a + b) / 2, candy(0xffffff, { rough: 0.3 }), 0.4);
+            roundBox(Z, 1, 1, b - a, side * (wH - 0.2), g.y0 + H - 4, (a + b) / 2, candy(0xffffff, { rough: 0.3 }), 0.4);
         }
     },
+    // Spiked lava in front of a higher platform: Super Jump (and Double Jump) up onto it
     superjump(s, g, Z, rng) {
         const th = THEMES[s.theme], lavaY = g.y0 - 5;
         lava(Z, -HW, HW, g.z0, g.z1, lavaY, th.lava);
-        scatterSpikes(Z, -HW, HW, g.z0, g.z1, lavaY, rng, 90);
+        scatterSpikes(Z, -HW, HW, g.z0, g.z1, lavaY, rng, 80);
     },
+    // The reference's Stage 3 corridor: grey spikes along both sides, crushers hanging from the ceiling
     crushers(s, g, Z, rng) {
         const th = THEMES[s.theme], n = g.p[1];
         floor(Z, -HW, HW, g.z0, g.z1, g.y0, th.floor);
-        const stripe = stripeTexture(0x16121f, 0xffd028, 5).clone(); stripe.needsUpdate = true; stripe.repeat.set(6, 1);
-        const beamM = new T.MeshStandardMaterial({ map: stripe, roughness: 0.4 });
-        const sideSpikes = [];
-        for (let k = 0; k < n; k++) {
-            const z = g.z0 + 14 + k * 26 + 6;
-            // Red danger zone under the beam
-            const red = new T.Mesh(new T.PlaneGeometry(HALL_W, 8), mat(0xff2a3a));
-            red.rotation.x = -Math.PI / 2; red.position.set(0, g.y0 + 0.04, z); zoneGroup(Z).add(red);
-            const beam = new T.Mesh(new T.BoxGeometry(HALL_W - 1, 3, 5), beamM); beam.castShadow = true; zoneGroup(Z).add(beam);
-            const kb = killBox(Z, 'crusher');
-            const period = Math.max(2.2, 3.4 - s.i * 0.15), phase = k * 0.9 + rng();
-            hz(Z, (t) => {
-                const c = cyc(t, period, phase) * period;
-                // up (12 high) 1.2 s, shake 0.4 s, slam 0.14 s, stay down 0.4 s, rise
-                let h;
-                if (c < 1.2) h = 12;
-                else if (c < 1.6) h = 12 + Math.sin(c * 50) * 0.18;
-                else if (c < 1.74) h = 12 * (1 - (c - 1.6) / 0.14);
-                else if (c < 2.14) h = 0;
-                else h = Math.min(12, 12 * (c - 2.14) / Math.max(0.3, period - 2.14));
-                beam.position.set(0, g.y0 + h + 1.5, z);
-                red.material = c >= 1.2 && c < 2.14 ? mat(0xff2a3a) : mat(0xd84a5a);
-                kb.active = h < 4.8;
-                kb.min.set(-HW, g.y0 + h - 0.2, z - 2.4); kb.max.set(HW, g.y0 + h + 3, z + 2.4);
-            });
-            for (const side of [-1, 1]) sideSpikes.push({ x: side * (HW - 2.2), z: z + (rng() - 0.5) * 6, s: 0.9 });
-        }
-        spikes(Z, sideSpikes, g.y0);
+        const side = [];
+        for (let z = g.z0 + 3; z < g.z1 - 2; z += 5.5) for (const sx of [-1, 1]) side.push({ x: sx * (HW - 2.2), z: z + (rng() - 0.5), s: 0.85 + rng() * 0.3 });
+        spikes(Z, side, g.y0);
+        const period = Math.max(2.4, 3.4 - s.i * 0.12);
+        for (let k = 0; k < n; k++) crusher(Z, g.z0 + 10 + k * 26 + 8, g.y0, HALL_W - 9, 6, period, k * 0.9 + rng() * 0.4);
+    },
+    // A path with lava along both edges
+    edgeLava(s, g, Z) {
+        const th = THEMES[s.theme], w = 10;
+        floor(Z, -w, w, g.z0, g.z1, g.y0, th.floor, null, 12);
+        for (const sx of [-1, 1]) lava(Z, sx > 0 ? w : -HW, sx > 0 ? HW : -w, g.z0, g.z1, g.y0 - 4, th.lava);
     },
     stairs(s, g, Z) {
         const th = THEMES[s.theme], steps = Math.ceil((g.y1 - g.y0) / 1.5);
         for (let k = 0; k < steps; k++) {
             const top = g.y0 + (g.y1 - g.y0) * (k + 1) / steps;
-            studBox(Z, HALL_W, top - g.y0 + 4, 2.4, 0, (top + g.y0 - 4) / 2, g.z0 + (k + 0.5) * 2.4, th.floor);
+            studBox(Z, HALL_W, top - g.y0 + 8, 3, 0, (top + g.y0 - 8) / 2, g.z0 + (k + 0.5) * 3, th.floor);
         }
     },
-    slidebar(s, g, Z) {
-        // The next stage's gate: a low navy panel ("STAGE 4 / Slide Under!") to slide under
-        const th = THEMES[s.theme], nx = STAGES[s.i + 1] || s;
-        floor(Z, -HW, HW, g.z0, g.z1, g.y0, th.floor);
-        const z = g.z0 + 5;
-        studBox(Z, HALL_W, 12, 3, 0, g.y0 + 3 + 6, z, C.navyDeep);
-        bigText(Z, nx.name.toUpperCase(), 14, new V3(0, g.y0 + 10.6, z - 1.6), Math.PI, ['#ffffff', '#dfe8ff'], nx.hint, '#ffffff');
+    // A deep navy block to slide through
+    tunnel(s, g, Z) {
+        floor(Z, -HW, HW, g.z0, g.z1, g.y0, THEMES[s.theme].floor);
+        slideBlock(Z, -HW, HW, g.z0, g.z1, g.y0, g.y0 + 44, g.p[2] === 'stage' ? s : null);
     },
-    slidewall(s, g, Z) {
-        const th = THEMES[s.theme];
-        floor(Z, -HW, HW, g.z0, g.z1, g.y0, th.floor);
-        const top = g.y0 + 40, low = g.y0 + 3;
-        studBox(Z, HALL_W, top - low, g.z1 - g.z0, 0, (top + low) / 2, (g.z0 + g.z1) / 2, C.navyDeep);
-        bigText(Z, '⬇ Slide Under! ⬇', 34, new V3(0, low + 9, g.z0 - 0.2), Math.PI, ['#ffffff', '#e0f0ff']);
-        glowBox(Z, HALL_W, 0.3, 0.3, 0, low + 0.1, g.z0 - 0.2, 0x5ad8ff, 1.6);
-    },
-    pillars(s, g, Z, rng) {
-        const th = THEMES[s.theme], n = g.p[1], W = PILLAR, gap = (g.z1 - g.z0 - n * W) / (n + 1), lavaY = g.y0 - 5;
-        lava(Z, -HW, HW, g.z0, g.z1, lavaY, th.lava);
-        const list = [];
-        for (let k = 0; k < n; k++) {
-            const zc = g.z0 + gap * (k + 1) + W * k + W / 2, x = (k % 2 ? 1 : -1) * 5;
-            studBox(Z, W, g.y0 - lavaY + 6, W, x, (g.y0 + lavaY - 6) / 2, zc, th.wall);
-            studBox(Z, W + 0.2, 0.6, W + 0.2, x, g.y0 - 0.25, zc, C.navyDeep, { solid: false });
-            list.push({ x: -x + (rng() - 0.5) * 6, z: zc + (rng() - 0.5) * 4, s: 1 });
+    // The reference's Stage 4 pyramid: steps up a ridge with lava on both sides, a Slide Under
+    // block on top, then a drop back down
+    pyramid(s, g, Z) {
+        const th = THEMES[s.theme], w = 12, top = g.y0 + 4.5;
+        for (let k = 0; k < 3; k++) {
+            const t = g.y0 + 1.5 * (k + 1);
+            studBox(Z, w * 2, t - g.y0 + 10, 4, 0, (t + g.y0 - 10) / 2, g.z0 + k * 4 + 2, th.floor);
         }
-        spikes(Z, list, lavaY);
+        studBox(Z, w * 2, 14.5, 12, 0, top - 7.25, g.z0 + 18, th.floor);
+        for (const sx of [-1, 1]) lava(Z, sx > 0 ? w : -HW, sx > 0 ? HW : -w, g.z0, g.z0 + 24, g.y0 - 4, th.lava);
+        slideBlock(Z, -HW, HW, g.z0 + 14, g.z0 + 22, top, g.y0 + 44, null);
+        floor(Z, -HW, HW, g.z0 + 24, g.z1, g.y0, th.floor);
     },
     dbjump(s, g, Z) {
         const th = THEMES[s.theme], n = g.p[1];
         floor(Z, -HW, HW, g.z0, g.z1, g.y0, th.floor);
         for (let k = 0; k < n; k++) {
-            const z = g.z0 + 10 + k * 20, h = 11.2;
+            const z = g.z0 + 12 + k * 24, h = 10.5;
             studBox(Z, HALL_W, h, 2, 0, g.y0 + h / 2, z, th.wall);
             roundBox(Z, HALL_W, 0.8, 2.6, 0, g.y0 + h, z, candy(0xffffff, { rough: 0.3 }), 0.3);
             // Blue arrow-up tile + "Double Jump!" on the face
-            const icon = new T.Mesh(new T.PlaneGeometry(4.4, 4.4), new T.MeshBasicMaterial({ map: arrowIcon(), transparent: true, toneMapped: false }));
-            icon.position.set(-9, g.y0 + h / 2, z - 1.05); icon.rotation.y = Math.PI; zoneGroup(Z).add(icon);
-            bigText(Z, 'Double Jump!', 22, new V3(3, g.y0 + h / 2, z - 1.06), Math.PI, ['#ffffff', '#e8f0ff']);
+            const icon = new T.Mesh(new T.PlaneGeometry(5, 5), new T.MeshBasicMaterial({ map: arrowIcon(), transparent: true, toneMapped: false }));
+            icon.position.set(12, g.y0 + h / 2, z - 1.05); icon.rotation.y = Math.PI; zoneGroup(Z).add(icon);
+            bigText(Z, 'Double Jump!', 24, new V3(-2, g.y0 + h / 2, z - 1.06), Math.PI, ['#ffffff', '#e8f0ff']);
         }
     },
-    lasers(s, g, Z) {
-        const th = THEMES[s.theme], n = g.p[1], gap = (g.z1 - g.z0 - n * 9) / (n + 1), lavaY = g.y0 - 6;
-        lava(Z, -HW, HW, g.z0, g.z1, lavaY, th.lava);
+    // The reference's Stage 5: a navy room of round pillars with red bands over a deep pit, red
+    // lasers sweeping up and down between them (wait for one to drop into the pit, then jump)
+    pillarRoom(s, g, Z) {
+        const n = g.p[1], R = PILLAR_R, gap = GAPS.pillar(s.need), pitY = g.y0 - 26;
+        const navyM = studMaterial(C.navy, { rough: 0.4 });
+        studBox(Z, HALL_W, 2, g.z1 - g.z0, 0, pitY - 1, (g.z0 + g.z1) / 2, C.navyDeep);
+        const pit = killBox(Z, 'fall'); pit.min.set(-HW, pitY - 2, g.z0); pit.max.set(HW, pitY + 3, g.z1); pit.active = true;
+        for (const zz of [g.z0, g.z1]) studBox(Z, HALL_W, g.y0 - pitY - 4, 1, 0, (g.y0 - 4 + pitY) / 2, zz, C.navyDeep, { solid: false });
+        // Navy panels over the hall walls in this room
+        for (const sx of [-1, 1]) studBox(Z, 0.6, 50, g.z1 - g.z0, sx * (HW - 0.2), pitY + 25, (g.z0 + g.z1) / 2, C.navy, { solid: false });
         for (let k = 0; k < n; k++) {
-            const zc = g.z0 + gap * (k + 1) + 9 * k + 4.5, x = (k % 2 ? 1 : -1) * 4;
-            const colH = g.y0 - lavaY + 6;
-            cyl(Z, 4.5, 4.5, colH, x, (g.y0 + lavaY - 6) / 2, zc, studMaterial(C.navyDeep, { rough: 0.4 }), 28);
-            solids.push(Object.assign(aabb(x, (g.y0 + lavaY - 6) / 2, zc, 8, colH, 8), { zone: Z }));
-            cyl(Z, 4.6, 4.6, 0.6, x, g.y0 - 1.4, zc, glowMat(0xff1e3c, 1.3), 28);
+            const zc = g.z0 + gap * (k + 1) + 2 * R * k + R, main = (k % 2 ? 1 : -1) * 4;
+            for (const x of [main, main - Math.sign(main) * 15]) {
+                const hgt = g.y0 - pitY;
+                cyl(Z, R, R, hgt, x, pitY + hgt / 2, zc, navyM, 28);
+                cyl(Z, R + 0.12, R + 0.12, 0.9, x, g.y0 - 1.6, zc, glowMat(0xff1e3c, 1.3), 28);
+                cyl(Z, R - 0.2, R - 0.2, 0.1, x, g.y0 + 0.01, zc, mat(0x2a3a7a), 28);
+                solids.push(Object.assign(aabb(x, pitY + hgt / 2, zc, R * 1.8, hgt, R * 1.8), { zone: Z }));
+            }
         }
         // A laser in every gap, sweeping up and down
         for (let k = 0; k <= n; k++) {
-            const zc = g.z0 + gap * (k + 0.5) + 9 * k;
-            sweepLaser(Z, zc, g.y0 + 0.8, g.y0 + 12, 3.2 - Math.min(0.8, s.i * 0.08), k * 0.7);
+            const zc = g.z0 + gap * (k + 0.5) + 2 * R * k;
+            // Down in the pit for about a third of the cycle: that is when you jump the gap
+            sweepLaser(Z, zc, g.y0 - 5, g.y0 + 12, 4.4 - Math.min(0.8, s.i * 0.08), k * 1.1);
         }
     },
-    platform(s, g, Z, rng) {
+    platform(s, g, Z) {
         const th = THEMES[s.theme], y = g.y0, ph = PLAT_HALF;
-        const [py, pp] = s.pads, xGapR = pp.x - PAD.w / 2, xGapL = xGapR - pp.gap;
-        floor(Z, -ph, xGapL, g.z0, g.z1, y, th.floor);
-        floor(Z, xGapR, ph, g.z0, g.z1, y, th.floor);
-        lava(Z, xGapL, xGapR, g.z0, g.z1, y - 5, th.lava);
+        // Thick, so its front face reaches down to the lava in front of it
+        floor(Z, -ph, ph, g.z0, g.z1, y, th.floor, null, 16);
         // Room walls (wider than the hall) and the connecting walls at both ends
-        sideWalls(Z, s, g.z0, g.z1, y - 12, y + 46, ph);
-        for (const zz of [g.z0, g.z1]) for (const side of [-1, 1]) studBox(Z, ph - HW, 58, 2, side * (HW + (ph - HW) / 2), y + 17, zz, th.wall);
-        // Wins pads: yellow (+N) and purple (+2N) with spinning trophies
+        sideWalls(Z, s, g.z0, g.z1, y - 16, y + 46, ph);
+        for (const zz of [g.z0, g.z1]) for (const side of [-1, 1]) studBox(Z, ph - HW, 62, 2, side * (HW + (ph - HW) / 2), y + 15, zz, th.wall);
+        // Wins pads: yellow (+N) on the floor, purple (+2N) up on a block, spinning trophies over both
         for (const p of s.pads) {
             const c = p.k ? C.purple : C.yellow;
-            studBox(Z, PAD.w, 1, PAD.d, p.x, y + 0.5, p.z, c, { extra: { pad: true } });
-            glowBox(Z, PAD.w + 0.2, 0.15, PAD.d + 0.2, p.x, y + 0.05, p.z, c, 1.3);
-            const cup = trophy(1.4); cup.position.set(p.x, y + 6, p.z); zoneGroup(Z).add(cup);
-            tickers.push((dt, t) => { if (zoneGroup(Z).visible) { cup.rotation.y = t * 1.6 + p.k; cup.position.y = y + 6 + Math.sin(t * 2 + p.k) * 0.35; } });
-            billboard([{ t: '+' + fmt(p.wins) + ' WIN' + (p.wins > 1 ? 'S' : ''), c: '#ffffff', s: '#1c1530', px: 80 }], 7, 512, new V3(p.x, y + 4.4, p.z), zoneGroup(Z));
-            const tr = aabb(p.x, y + 2.5, p.z, PAD.w, 4, PAD.d); tr.zone = Z;
+            if (p.block) studBox(Z, PAD.w + 2, p.block, PAD.d + 2, p.x, y + p.block / 2, p.z, th.wall);
+            studBox(Z, PAD.w, 0.8, PAD.d, p.x, p.y + 0.4, p.z, c, { extra: { pad: true } });
+            glowBox(Z, PAD.w + 0.2, 0.12, PAD.d + 0.2, p.x, p.y + 0.06, p.z, c, 1.3);
+            const cup = trophy(1.4); cup.position.set(p.x, p.y + 6, p.z); zoneGroup(Z).add(cup);
+            tickers.push((dt, t) => { if (zoneGroup(Z).visible) { cup.rotation.y = t * 1.6 + p.k; cup.position.y = p.y + 6 + Math.sin(t * 2 + p.k) * 0.35; } });
+            billboard([{ t: '+' + fmt(p.wins) + ' WIN' + (p.wins > 1 ? 'S' : ''), c: '#ffffff', s: '#1c1530', px: 80 }], 7, 512, new V3(p.x, p.y + 4.2, p.z), zoneGroup(Z));
+            const tr = aabb(p.x, p.y + 2.3, p.z, PAD.w, 4, PAD.d); tr.zone = Z;
             tr.enter = () => actions.pad(s.i, p.k);
             triggers.push(tr);
         }
@@ -812,20 +852,20 @@ const SEG = {
         for (const spot of TREAD_SPOTS) if (spot.zone === s.i) treadmill(Z, spot);
         // Big floating "STAGE N" over the platform; landing on it shows the title and sets the revive point
         const nx = STAGES[s.i + 1];
-        if (nx) bigText(Z, nx.name.toUpperCase(), 26, new V3(0, y + 30, g.z0 + 6), Math.PI, ['#ffffff', '#e8e0ff']);
+        if (nx) bigText(Z, nx.name.toUpperCase(), 26, new V3(0, y + 30, g.z0 + 14), Math.PI, ['#ffffff', '#e8e0ff']);
         const tr = aabb(0, y + 3, g.z0 + 8, ph * 2, 8, 12); tr.zone = Z;
         tr.enter = () => actions.platform(s.i);
         triggers.push(tr);
         checkpoints[s.i] = new V3(s.spawn.x, s.spawn.y, s.spawn.z);
-        if (nx) stageGate(nx, g.z1 - 2, y);
-        void rng;
+        // The next stage's gate (its first obstacle is the gate when it is a Slide Under block)
+        if (nx && !(nx.segList[0].k === 'tunnel' && nx.segList[0].p[2] === 'stage')) stageGate(nx, g.z1 - 2, y, Z);
     },
     finale(s, g, Z) {
         const y = g.y0, ph = PLAT_HALF;
-        floor(Z, -ph, ph, g.z0, g.z1, y, 0xffd86a);
-        sideWalls(Z, s, g.z0, g.z1, y - 12, y + 60, ph);
-        studBox(Z, ph * 2 + 4, 72, 2, 0, y + 24, g.z1 + 1, THEMES.gold.wall);
-        for (const side of [-1, 1]) studBox(Z, ph - HW, 72, 2, side * (HW + (ph - HW) / 2), y + 24, g.z0, THEMES.gold.wall);
+        floor(Z, -ph, ph, g.z0, g.z1, y, 0xe0b850, null, 16);
+        sideWalls(Z, s, g.z0, g.z1, y - 16, y + 60, ph);
+        studBox(Z, ph * 2 + 4, 76, 2, 0, y + 22, g.z1 + 1, THEMES.gold.wall);
+        for (const side of [-1, 1]) studBox(Z, ph - HW, 76, 2, side * (HW + (ph - HW) / 2), y + 22, g.z0, THEMES.gold.wall);
         // Rainbow carpet to the ESCAPE pad, a giant trophy behind it
         const rb = new T.Mesh(new T.PlaneGeometry(12, FINALE.z - g.z0), new T.MeshBasicMaterial({ map: rainbowTexture(), toneMapped: false }));
         rb.rotation.x = -Math.PI / 2; rb.position.set(0, y + 0.05, (g.z0 + FINALE.z) / 2); zoneGroup(Z).add(rb);
@@ -856,7 +896,7 @@ function buildStage(s) {
     for (const g of s.segList) {
         SEG[g.k](s, g, Z, rng);
         if (g.k !== 'platform' && g.k !== 'finale') {
-            const lo = Math.min(g.y0, g.y1) - 14, hi = Math.max(g.y0, g.y1) + 46;
+            const lo = g.k === 'pillarRoom' ? g.y0 - 30 : Math.min(g.y0, g.y1) - 16, hi = Math.max(g.y0, g.y1) + 46;
             sideWalls(Z, s, g.z0, g.z1, lo, hi);
             hallPillars(Z, s, g.z0, g.z1, lo, hi);
             roundBox(Z, 2.8, 1.4, g.z1 - g.z0, -HW - 1, hi + 0.7, (g.z0 + g.z1) / 2, candy(th.trim, { rough: 0.3 }), 0.5);
@@ -890,7 +930,7 @@ export function updateWorld(dt, stage, tOverride) {
     for (const h of hazards) if (h.zone === -1 || Math.abs(h.zone - Math.max(0, stage)) <= 1) h.update(t, dt);
 }
 export function buildWorld() {
-    chevMat = new T.MeshStandardMaterial({ map: chevronTexture(), roughness: 0.4, emissive: 0x400008, emissiveIntensity: 0.4 });
+    chevMat = new T.MeshStandardMaterial({ map: chevronTexture(), roughness: 0.4, emissive: 0xffffff, emissiveMap: chevronTexture(), emissiveIntensity: 0.55 });
     glassMat = new T.MeshStandardMaterial({ map: glassTexture(), roughness: 0.15, metalness: 0.1, emissive: 0x1a8ae0, emissiveIntensity: 0.55 });
     beltTex = beltTexture();
     scrolling.push({ tex: beltTex, u: 0, v: -1.4 });

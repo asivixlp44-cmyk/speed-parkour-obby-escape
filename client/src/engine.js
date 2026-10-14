@@ -15,8 +15,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = T.PCFSoftShadowMap;
 
 export const scene = new T.Scene();
-export const FOG = 0xd8d0ff;
-scene.fog = new T.Fog(FOG, 320, 1500);
+export const FOG = 0xb8acec;
+scene.fog = new T.Fog(FOG, 420, 1600);
 scene.background = new T.Color(FOG);
 
 // ----- sky: a dome that follows the camera -----
@@ -87,18 +87,18 @@ resize();
 {
     const pm = new T.PMREMGenerator(renderer);
     scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environmentIntensity = 0.55;
+    scene.environmentIntensity = 0.45;
     pm.dispose();
 }
-export const hemi = new T.HemisphereLight(0xf4f0ff, 0x8a7ac8, 0.95);
+export const hemi = new T.HemisphereLight(0xf2eeff, 0x6a5a98, 0.95);
 scene.add(hemi);
-export const sun = new T.DirectionalLight(0xfff4ea, 1.55);
+export const sun = new T.DirectionalLight(0xfff2e6, 1.9);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 340 });
 sun.shadow.bias = -0.0008;
 sun.shadow.normalBias = 0.04;
-sun.shadow.radius = 3;
+sun.shadow.radius = 2;
 scene.add(sun, sun.target);
 
 // ----- materials & textures -----
@@ -188,7 +188,7 @@ export function studMaterial(color, o) {
     if (!m) {
         const map = STUD_TEX.map.clone(), nrm = STUD_TEX.nrm.clone();
         for (const t of [map, nrm]) { t.repeat.set(rx, ry); t.needsUpdate = true; }
-        m = new T.MeshStandardMaterial({ color, map, normalMap: nrm, normalScale: new T.Vector2(0.55, 0.55), roughness: o.rough ?? 0.5, metalness: 0 });
+        m = new T.MeshStandardMaterial({ color, map, normalMap: nrm, normalScale: new T.Vector2(0.6, 0.6), roughness: o.rough ?? 0.5, metalness: 0 });
         matCache.set(key, m);
     }
     return m;

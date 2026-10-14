@@ -1013,9 +1013,9 @@ function swingStep(dt) {
     s.a = SWING_A0 + (SWING_A1 - SWING_A0) * (k * k * (1.6 - 0.6 * k));
     P.pos.set(s.x, pl.y - SWING_R * Math.cos(s.a), pl.z + SWING_R * Math.sin(s.a));
     if (k >= 1) {
-        const L = Math.max(30, 1.05 * s.entry);
+        const L = Math.max(32, 1.05 * s.entry);
         P.swing = null; P.poleCd = 0.6;
-        P.vy = 46; P.hv.set(0, 0, L); P.airTime = 0.01;
+        P.vy = 52; P.hv.set(0, 0, L); P.airTime = 0.01;
         sfx('whoosh'); fovKick = 6;
     }
 }

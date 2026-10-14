@@ -19,12 +19,12 @@ if (!QUALITIES[quality]) quality = 'high';
 // Neon materials are HDR (brighter than 1) so only they cross the bloom threshold;
 // neutral tone mapping keeps every other colour close to its authored sRGB value.
 renderer.toneMapping = T.NeutralToneMapping;
-renderer.toneMappingExposure = 1.02;
+renderer.toneMappingExposure = 1.0;
 
 // Final grade, after tone mapping: a little more saturation and contrast (the punchy candy look),
 // a soft vignette and a faint pink lift in the shadows
 const GradeShader = {
-    uniforms: { tDiffuse: { value: null }, uSat: { value: 1.16 }, uContrast: { value: 1.06 }, uVignette: { value: 0.24 } },
+    uniforms: { tDiffuse: { value: null }, uSat: { value: 1.08 }, uContrast: { value: 1.1 }, uVignette: { value: 0.26 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform sampler2D tDiffuse; uniform float uSat; uniform float uContrast; uniform float uVignette; varying vec2 vUv;
         void main() {

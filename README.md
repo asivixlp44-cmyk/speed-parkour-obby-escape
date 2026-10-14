@@ -37,20 +37,21 @@ For development run `npm run dev:server` and `npm run dev:client`, then open the
   - **Dash** (E, on the ground or once per jump in the air, 1.5 s cooldown)
   - **Slide** (C or Shift: low enough to pass under the Slide Under walls)
   - **Climb**: walk into a red chevron wall. **Swing**: touch a white pole over the lava and you're spun round it and thrown forward. **Wall run**: jump at the blue glass walls; jump again to kick off. Let go of the keys in the air to stop and aim your landing.
-- **9 stages in one long hall** north of the lobby. Each has a navy gate ("STAGE 4 / Slide Under! / ⚡ 44 Speed", green once you're fast enough) and ends on a platform with a **yellow Wins pad** and a **purple pad** across a lava gap, treadmills, and the next stage's gate. A pad pays out and sends you to the lobby. Fall in the lava, touch spikes, lasers or crushers and you go back to the lobby, or press **Revive? (6.0) ONLY 🏆N** to restart the stage you were on.
+- **9 stages in one long hall** north of the lobby. Each has a navy gate ("STAGE 4 / Slide Under! / ⚡ 44 Speed", green once you're fast enough) and ends on a platform with a **yellow Wins pad** and a **purple pad** across a lava gap, treadmills, and the next stage's gate. A pad pays out and sends you to the lobby. Fall in the lava or a pit, touch spikes, lasers or crushers and you go back to the lobby, or press **Revive? (6.0) ONLY 🏆N** to restart the stage you were on.
 
-  | # | Stage | Obstacles | Speed | Wins |
+  | # | Stage | Obstacles (Stages 1-5 laid out as in the reference video) | Speed | Wins |
   |---|---|---|---|---|
-  | 1 | Climb | climb wall, swing pole over lava | 10 | 1 / 2 |
-  | 2 | Wall Run & Super Jump | blue glass wall run over spikes, Super Jump gap | 24 | 4 / 10 |
-  | 3 | Crushers | hazard-striped crushers, stairs, wall run, Slide Under the Stage 4 sign | 34 | 8 / 20 |
-  | 4 | Slide Under | Slide Under walls, climb wall, Double Jump pillars | 44 | 12 / 25 |
-  | 5 | Double Jump | four Double Jump walls, Super Jump gap | 54 | 15 / 30 |
-  | 6 | Laser Pillars (night) | navy pillars over lava with sweeping red lasers, wall run | 66 | 30 / 65 |
-  | 7 | Swing & Crush (dusk) | two poles, four crushers, zig-zag wall run | 80 | 60 / 130 |
-  | 8 | Dash Across (neon) | Super Jump gap, pillars, lasers, Slide Under | 96 | 125 / 260 |
-  | 9 | Final Escape (gold) | 36-stud climb, zig-zag wall run, Double Jump walls, Super Jump, then **ESCAPE! +1K Wins** | 115 | 250 / 500 |
+  | 1 | Climb | red chevron climb wall just inside the door, then swing on the pole up onto the platform | 10 | 1 / 2 |
+  | 2 | Wall Run & Super Jump | blue glass wall run over spiked lava, then "Press Super Jump!" up onto the platform | 24 | 4 / 10 |
+  | 3 | Crushers | corridor of striped crushers on white pistons with spikes along the sides, lava edges, stairs, wall run | 34 | 8 / 20 |
+  | 4 | Slide Under | slide through the STAGE 4 block, climb wall, step pyramid with a second Slide Under block, three Double Jump walls | 44 | 15 / 30 |
+  | 5 | Laser Pillars | navy room of round pillars with red bands over a pit, red lasers sweeping up and down (jump when one drops) | 54 | 30 / 65 |
+  | 6 | Crusher Run (night) | crushers, lava edges, zig-zag wall run, pole swing | 66 | 60 / 130 |
+  | 7 | Slide & Climb (dusk) | Slide Under gate, tall climb wall, pyramid, four Double Jump walls | 80 | 125 / 260 |
+  | 8 | Dash Across (neon) | longer laser pillar room, wall run, Super Jump | 96 | 250 / 500 |
+  | 9 | Final Escape (gold) | 44-stud climb, zig-zag wall run, crushers, Double Jump walls, Super Jump, then **ESCAPE! +2.5K Wins** | 115 | 500 / 1K |
 
+  Each stage ends on a platform with a yellow Wins pad on the floor and a purple pad up on a block (jump onto it), a paid treadmill and a TRAIN HERE one, and the next stage's navy gate.
   Hazards run on the server clock, so everyone sees the same thing. Every stage was played through by a scripted bot at exactly its recommended Speed. Each rebirth adds +25% Wins; Admin Abuse doubles them.
 - **Lobby** (lavender hall, cyan arrow carpet to the red Stage 1 door, as in the reference):
   - **TRAIN SPEED** (right): free TRAIN HERE treadmills, the rebirth ones (x1.5, x2) and the paid x5 (15 Wins), x10 (60), x25 (250), x100 (2K) and x1000 (40K). Stand on an owned one and you run on your own; every step counts xN. Buying one unlocks it on the stage platforms too.
