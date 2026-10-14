@@ -211,12 +211,14 @@ export const TREADS = [
 ];
 export const treadById = Object.fromEntries(TREADS.map((d) => [d.id, d]));
 export const TREAD = { len: 12, width: 5.6, top: 1.2 };
-// Where each treadmill stands (belt centre). The lobby's TRAIN SPEED area is on the right of the
-// spawn (-x, as in the reference), then one or two on every stage platform.
+// Where each treadmill stands (belt centre). dir: the way you face running on it (toward the
+// console): +z by default; the lobby's are turned to face the TRAIN SPEED wall (-x).
+// The lobby's TRAIN SPEED row is on the right of the spawn (-x, as in the reference), then one or
+// two on every stage platform.
 export const TREAD_SPOTS = [];
+export const LOBBY_TREAD_X = -70;
 {
-    ['n', 'n', 'n', 'n', 'r1', 'r3'].forEach((id, k) => TREAD_SPOTS.push({ id, x: -32 - k * 8.5, z: -22, y: 0, zone: -1 }));
-    ['x5', 'x10', 'x25', 'x100', 'x1000'].forEach((id, k) => TREAD_SPOTS.push({ id, x: -34 - k * 10, z: -64, y: 0, zone: -1 }));
+    ['x1000', 'x100', 'x25', 'x10', 'x5', 'n', 'n', 'n', 'n', 'r1', 'r3'].forEach((id, k) => TREAD_SPOTS.push({ id, x: LOBBY_TREAD_X, z: -80 + k * 8.6, y: 0.3, zone: -1, dir: -1, ax: 'x' }));
     const per = [['x5', 'n'], ['x25', 'n'], ['x10', 'n'], ['x100', 'n'], ['x100', 'n'], ['x1000', 'n'], ['x1000', 'n'], ['x1000', 'n']];
     STAGES.forEach((s, i) => {
         if (!per[i]) return;
@@ -226,7 +228,8 @@ export const TREAD_SPOTS = [];
 }
 export function treadmillAt(x, y, z) {
     for (const t of TREAD_SPOTS) {
-        if (Math.abs(x - t.x) <= TREAD.width / 2 + 0.3 && Math.abs(z - t.z) <= TREAD.len / 2 + 0.3 && y >= t.y + TREAD.top - 0.8 && y <= t.y + TREAD.top + 2.5) return treadById[t.id];
+        const hx = (t.ax === 'x' ? TREAD.len : TREAD.width) / 2 + 0.3, hz = (t.ax === 'x' ? TREAD.width : TREAD.len) / 2 + 0.3;
+        if (Math.abs(x - t.x) <= hx && Math.abs(z - t.z) <= hz && y >= t.y + TREAD.top - 0.8 && y <= t.y + TREAD.top + 2.5) return treadById[t.id];
     }
     return null;
 }

@@ -73,7 +73,7 @@ function setTrail(g, id) {
 function poseCharacter(g, pose, dt, extra) {
     const u = g.userData, k = 1 - Math.exp(-dt * 14);
     let lean = 0, roll = 0;
-    if (pose === 'slide') lean = -1.15;
+    if (pose === 'slide') lean = -0.85;
     else if (pose === 'dash') lean = 0.45;
     else if (pose === 'wallL') roll = -0.55;
     else if (pose === 'wallR') roll = 0.55;
@@ -83,7 +83,7 @@ function poseCharacter(g, pose, dt, extra) {
     if (pose === 'flip' || pose === 'super') u.flip = Math.min(Math.PI * 2, u.flip + dt * (pose === 'super' ? 13 : 16));
     else u.flip = 0;
     u.pivot.rotation.set(u.lean + (u.flip > 0 && u.flip < Math.PI * 2 ? u.flip : 0), 0, u.roll);
-    u.pivot.position.y = pose === 'slide' ? PIVOT - 1.6 : PIVOT;
+    u.pivot.position.y = pose === 'slide' ? PIVOT - 1.1 : PIVOT;
     void extra;
 }
 
@@ -128,7 +128,8 @@ function buildPlayer(kit, skin) {
     scene.add(rig);
     nameLabelText = '';
     headLabel = billboard([{ t: S.name || ' ', c: '#ffffff', s: '#1c1030', px: 60 }], 6.5, 512, new V3(0, 7.6, 0), rig);
-    headLabel.material.depthTest = false; headLabel.renderOrder = 10;
+    // Like Roblox: you don't see your own name over your head (it is still there for chat bubbles)
+    headLabel.visible = false;
     rig.position.copy(P.pos);
     localAvatar = null;
     setupLocalAvatar();
@@ -362,6 +363,10 @@ class Remote {
         setShoe(r, p.shoe); setTrail(r, p.trail);
         u.trail.update(trailAt(r), (moving || air) && r.visible, dt, t);
         if (p.name !== this.labelText) { this.labelText = p.name; this.label.userData.set([{ t: p.name, c: '#ffffff', s: '#1c1030', px: 56 }]); }
+        // Name tags fade out when the player is right next to the camera (else they fill the screen)
+        const cd = camera.position.distanceTo(r.position);
+        this.label.material.opacity = Math.min(1, Math.max(0, (cd - 7) / 6));
+        this.label.visible = r.visible && cd > 7 && cd < 160;
     }
     dispose() {
         this.dead = true;
@@ -875,9 +880,14 @@ function update(dt) {
             let vx = P.hv.x + P.boost.x, vz = P.hv.z + P.boost.z;
             // Treadmills: an owned one runs you in place; a locked one pushes you off the back
             if (tread) {
-                if (treadRun) { vx = 0; vz = 0; P.facing = lerpAngle(P.facing, 0, 1 - Math.exp(-dt * 10)); }
-                else if (!treadOwned(tread)) vz -= 6;
-                else if (vz > 0) vz *= 0.15;
+                const td = P.ground.treadDir || { x: 0, z: 1 }, ty = Math.atan2(td.x, td.z);
+                if (treadRun) { vx = 0; vz = 0; P.facing = lerpAngle(P.facing, ty, 1 - Math.exp(-dt * 10)); }
+                else if (!treadOwned(tread)) { vx -= td.x * 6; vz -= td.z * 6; }
+                else {
+                    // Walking forward on an owned belt barely moves you
+                    const along = vx * td.x + vz * td.z;
+                    if (along > 0) { vx -= td.x * along * 0.85; vz -= td.z * along * 0.85; }
+                }
             }
             const dist = Math.max(Math.abs(vx), Math.abs(vz), Math.abs(P.vy)) * dt;
             const n = Math.max(1, Math.ceil(dist / 0.6));
@@ -916,7 +926,7 @@ function update(dt) {
                 const dy = P.pos.y + 3.2 - pl.y, dz = P.pos.z - pl.z;
                 if (dy * dy + dz * dz < 3.4 * 3.4) { startSwing(pl); break; }
             }
-            if (treadRun) P.facing = lerpAngle(P.facing, 0, 1 - Math.exp(-dt * 14));
+            if (treadRun) { const td = P.ground && P.ground.treadDir; P.facing = lerpAngle(P.facing, td ? Math.atan2(td.x, td.z) : 0, 1 - Math.exp(-dt * 14)); }
             else if (!P.wall && P.slideT <= 0 && !P.crouched && mv.lengthSq() > 0.01) P.facing = lerpAngle(P.facing, Math.atan2(mv.x, mv.z), 1 - Math.exp(-dt * 14));
         }
 

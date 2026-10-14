@@ -12,7 +12,7 @@ import {
 import { emitTread } from './fx.js';
 import { S, actions, net } from './state.js';
 import {
-    CFG, LOBBY, STAGES, HALL_W, PLAT_HALF, PAD, WALLRUN_HALF, PILLAR_R, GAPS, TUNNEL_H, THEMES, TREAD, TREAD_SPOTS, treadById, ownsTread,
+    CFG, LOBBY, STAGES, HALL_W, PLAT_HALF, PAD, WALLRUN_HALF, PILLAR_R, GAPS, TUNNEL_H, THEMES, TREAD, TREAD_SPOTS, treadById, ownsTread, LOBBY_TREAD_X,
     SHOES, OP_SHOES, FINALE, ESCAPE, fmt, rngFrom, eventState, maxSpeedFor,
 } from '../../shared/config.js';
 
@@ -302,10 +302,11 @@ const boards = {};
 const signs = {};
 export const treadOwned = (def) => ownsTread(S, def);
 
-function lobbyPillar(Z, x, z, h) {
-    studBox(Z, 7, h, 7, x, h / 2, z, C.pillar, { cast: false });
-    roundBox(Z, 8.4, 1.6, 8.4, x, h + 0.8, z, candy(C.trim, { rough: 0.35 }), 0.4);
-    roundBox(Z, 8.4, 1.6, 8.4, x, 0.8, z, candy(C.trim, { rough: 0.35 }), 0.4);
+function lobbyPillar(Z, x, z, h, sx, sz) {
+    sx = sx || 7; sz = sz || 7;
+    studBox(Z, sx, h, sz, x, h / 2, z, C.pillar, { cast: false });
+    roundBox(Z, sx + 1.4, 1.6, sz + 1.4, x, h + 0.8, z, candy(C.trim, { rough: 0.35 }), 0.4);
+    roundBox(Z, sx + 1.4, 1.6, sz + 1.4, x, 0.8, z, candy(C.trim, { rough: 0.35 }), 0.4);
 }
 function buildLobby() {
     const Z = -1;
@@ -330,7 +331,7 @@ function buildLobby() {
     studBox(Z, HALL_W, WH - 30, 2, 0, 30 + (WH - 30) / 2, LZ1 + 1, C.wall);
     for (const x of [-LX + 4, -58, -30, 30, 58, LX - 4]) lobbyPillar(Z, x, LZ1 - 3, WH);
     for (const x of [-LX + 4, -44, 0, 44, LX - 4]) lobbyPillar(Z, x, LZ0 + 3, WH);
-    for (const z of [-60, -20]) { lobbyPillar(Z, LX - 3, z, WH); lobbyPillar(Z, -LX + 3, z, WH); }
+    for (const z of [-60, -20]) { lobbyPillar(Z, LX - 1.5, z, WH, 3, 7); lobbyPillar(Z, -LX + 1.5, z, WH, 3, 7); }
     // Doorway frame and the STAGE 1 sign over it
     for (const s of [-1, 1]) roundBox(Z, 3.4, 30, 4, s * (HW + 1.7), 15, LZ1, candy(C.pillar, { rough: 0.35 }), 0.5);
     roundBox(Z, HALL_W + 6.8, 3.4, 4, 0, 30, LZ1, candy(C.pillar, { rough: 0.35 }), 0.5);
@@ -349,7 +350,8 @@ function buildLobby() {
     buildPortal(Z);
     buildLobbyTreads(Z);
     buildWinsShop(Z);
-    sign(Z, [{ t: 'Jump twice to' }, { t: 'Double Jump!' }], 13, 5.6, new V3(30, 9, LZ1 - 1.2), Math.PI, 0.05);
+    roundBox(Z, 0.5, 6, 0.5, 15, 3, LZ1 - 9, candy(0x6a5a9a), 0.2);
+    sign(Z, [{ t: 'Jump twice to' }, { t: 'Double Jump!' }], 8, 3.6, new V3(15, 7.4, LZ1 - 9.3), Math.PI - 0.25, 0.05);
 }
 
 // ----- leaderboards: Top Speed (blue), Top Wins (gold), Top Rebirths (purple), as in the reference -----
@@ -365,7 +367,9 @@ function leaderboard(Z, pos, title, color, yaw) {
     scr.position.set(0, 12.6, 0.82); grp.add(scr);
     const head = textPlane([{ t: title, c: '#ffffff', s: '#1c1530', px: 92 }], 15, 1024, new V3(), new V3(0, 0, 1), grp);
     head.position.set(0, 23.4, 0.85);
-    solids.push(Object.assign(aabb(pos.x, 13, pos.z, 12, 26, 12), { zone: Z }));
+    // Collide with the board itself (17 wide, thin), not a big box round it
+    const across = Math.abs(Math.sin(yaw)) > 0.5;
+    solids.push(Object.assign(aabb(pos.x, 13, pos.z, across ? 1.6 : 18, 26, across ? 18 : 1.6), { zone: Z }));
     return { cv, tex, color };
 }
 function buildBoards(Z) {
@@ -416,10 +420,10 @@ function buildChest(Z) {
 function buildEventBoard(Z) {
     const x = -32, z = LZ1 - 8;
     for (const s of [-1, 1]) roundBox(Z, 1.2, 14, 1.2, x + s * 8, 7, z, candy(0x2a2a3a, { rough: 0.4 }), 0.3);
-    const p = canvasPlane(Z, 18, 10.5, 768, 448, new V3(x, 14, z - 0.7), Math.PI);
+    const p = canvasPlane(Z, 18, 10.5, 768, 448, new V3(x, 14, z - 0.78), Math.PI);
     roundBox(Z, 19, 11.5, 1, x, 14, z, candy(0x14141e, { rough: 0.4 }), 0.4);
     signs.event = { cv: p.cv, tex: p.tex, last: '' };
-    solids.push(Object.assign(aabb(x, 8, z, 18, 16, 3), { zone: Z }));
+    solids.push(Object.assign(aabb(x, 8, z, 19, 16, 1.4), { zone: Z }));
 }
 function drawEventBoard() {
     const e = signs.event;
@@ -472,12 +476,12 @@ function buildOpShoes(Z) {
     billboard([{ t: 'Invite All Of Your', c: '#ffd028', s: '#1c1530', px: 52 }, { t: 'Friends!', c: '#ffd028', s: '#1c1530', px: 52 }, { t: '+10% Speed each', c: '#ffffff', s: '#1c1530', px: 46 }], 10, 512, new V3(54, 9, LZ1 - 14), zoneGroup(Z));
     const tr = aabb(54, 2, LZ1 - 14, 8, 4, 8); tr.zone = Z; tr.enter = () => actions.invite(); triggers.push(tr);
     // Hacker Shoes, by the WINS SHOP
-    shoeStand(Z, OP_SHOES[3], 66, LZ0 + 16, 0x2aff6a);
+    shoeStand(Z, OP_SHOES[3], LX - 12, LZ1 - 12, 0x2aff6a);
 }
 
 // ----- WORLD 2 portal (2,500 Wins) behind the spawn -----
 function buildPortal(Z) {
-    const x = 50, z = LZ0 + 4;
+    const x = 61, z = LZ0 + 4;
     for (const s of [-1, 1]) studBox(Z, 3, 20, 3, x + s * 7, 10, z, 0x1e1640);
     studBox(Z, 17, 3, 3, x, 21.5, z, 0x1e1640);
     const sw = new T.Mesh(new T.CircleGeometry(5.6, 40), new T.MeshBasicMaterial({ color: 0xff3ad8, toneMapped: false }));
@@ -504,19 +508,25 @@ function treadmill(Z, spot) {
     const def = treadById[spot.id], g = TREAD, cx = spot.x, cz = spot.z, y = spot.y, top = y + g.top;
     const fancy = def.id !== 'n';
     const frameC = fancy ? def.color : C.frame;
+    // Along x or z: (a, b) = size across / along the belt mapped onto x / z; d = the way you face
+    const alongX = spot.ax === 'x', d = spot.dir || 1;
+    const sx = (across, along) => (alongX ? along : across), sz = (across, along) => (alongX ? across : along);
+    const P = (u, v) => (alongX ? [cx + v, cz + u] : [cx + u, cz + v]);   // u across, v along the belt
     // Frame round the belt (lavender studs, or the treadmill's colour)
-    studBox(Z, g.width + 2.4, g.top, g.len + 2.4, cx, y + g.top / 2 - 0.15, cz, frameC === 0xffffff ? 0xe8e8f8 : frameC, { solid: false });
-    solid(Z, cx, y + g.top / 2 - 0.15, cz, g.width + 2.4, g.top - 0.3, g.len + 2.4);
+    studBox(Z, sx(g.width + 2.4, g.len + 2.4), g.top, sz(g.width + 2.4, g.len + 2.4), cx, y + g.top / 2 - 0.15, cz, frameC === 0xffffff ? 0xe8e8f8 : frameC, { solid: false });
+    solid(Z, cx, y + g.top / 2 - 0.15, cz, sx(g.width + 2.4, g.len + 2.4), g.top - 0.3, sz(g.width + 2.4, g.len + 2.4));
     const belt = new T.Mesh(new T.BoxGeometry(g.width, 0.3, g.len), new T.MeshStandardMaterial({ map: beltTex, roughness: 0.6 }));
-    belt.position.set(cx, top + 0.15, cz); belt.receiveShadow = true; zoneGroup(Z).add(belt);
-    solid(Z, cx, top, cz, g.width, 0.3, g.len, { tread: def });
+    belt.position.set(cx, top + 0.15, cz); belt.rotation.y = alongX ? Math.PI / 2 : 0; belt.receiveShadow = true; zoneGroup(Z).add(belt);
+    solid(Z, cx, top, cz, sx(g.width, g.len), 0.3, sz(g.width, g.len), { tread: def, treadDir: alongX ? { x: d, z: 0 } : { x: 0, z: d } });
     for (const s of [-1, 1]) {
-        if (fancy) glowBox(Z, 0.4, 0.5, g.len + 1, cx + s * (g.width / 2 + 0.7), top + 0.35, cz, def.id === 'x100' ? 0xffffff : def.color, 1.5);
-        roundBox(Z, 0.5, 4, 0.5, cx + s * (g.width / 2 + 0.6), top + 2, cz + g.len / 2 - 0.5, candy(0xe8e4f4, { rough: 0.3 }), 0.2);
+        const [rx, rz] = P(s * (g.width / 2 + 0.7), 0), [px, pz] = P(s * (g.width / 2 + 0.6), d * (g.len / 2 - 0.5));
+        if (fancy) glowBox(Z, sx(0.4, g.len + 1), 0.5, sz(0.4, g.len + 1), rx, top + 0.35, rz, def.id === 'x100' ? 0xffffff : def.color, 1.5);
+        roundBox(Z, 0.5, 4, 0.5, px, top + 2, pz, candy(0xe8e4f4, { rough: 0.3 }), 0.2);
     }
-    roundBox(Z, g.width + 1.6, 0.6, 1.4, cx, top + 4, cz + g.len / 2 - 0.5, candy(fancy ? frameC : 0x6a64a8, { rough: 0.3 }), 0.25);
+    const [hx, hz] = P(0, d * (g.len / 2 - 0.5));
+    roundBox(Z, sx(g.width + 1.6, 1.4), 0.6, sz(g.width + 1.6, 1.4), hx, top + 4, hz, candy(fancy ? frameC : 0x6a64a8, { rough: 0.3 }), 0.25);
     const small = spot.zone >= 0;
-    const sp = billboard(treadLines(def), (def.id === 'n' ? 8 : 9.5) * (small ? 0.7 : 1), 512, new V3(cx, top + (small ? 6.5 : 9), cz), zoneGroup(Z));
+    const sp = billboard(treadLines(def), (def.id === 'n' ? 6.4 : 7.8) * (small ? 0.85 : 1), 512, new V3(cx, top + (small ? 6.5 : 8), cz), zoneGroup(Z));
     shopItems.push({ kind: 'tread', def, sp, sig: '' });
     if (fancy) {
         const at = new V3(cx, top + 0.4, cz);
@@ -524,19 +534,19 @@ function treadmill(Z, spot) {
         tickers.push((dt) => {
             if (!zoneGroup(Z).visible || camera.position.distanceToSquared(at) > 110 * 110) return;
             acc += dt * (ownsTread(S, def) ? 5 : 1.5);
-            while (acc > 1) { acc -= 1; emitTread(at, def.mult, g.width * 0.8, g.len * 0.9, def.id === 'x100' ? 0xffffff : def.color); }
+            while (acc > 1) { acc -= 1; emitTread(at, def.mult, sz(g.width, g.len) * 0.9, sx(g.width, g.len) * 0.8, def.id === 'x100' ? 0xffffff : def.color); }
         });
     }
     // Locked: stepping on it says so and offers it
-    const tr = aabb(cx, top + 2, cz, g.width, 3, g.len); tr.zone = Z;
+    const tr = aabb(cx, top + 2, cz, sx(g.width, g.len), 3, sz(g.width, g.len)); tr.zone = Z;
     tr.enter = () => { if (!ownsTread(S, def)) actions.treadBuy(def); };
     triggers.push(tr);
 }
 function buildLobbyTreads(Z) {
     // The TRAIN SPEED floor: a blue studded deck
-    floor(Z, -LX + 2, -24, -92, -8, 0.3, 0x4a8cff, null, 0.6);
-    bigText(Z, 'TRAIN SPEED', 40, new V3(-LX + 0.6, 30, -50), Math.PI / 2, ['#ffffff', '#8ae8ff']);
-    for (const spot of TREAD_SPOTS) if (spot.zone === -1) treadmill(Z, { ...spot, y: 0.3 });
+    floor(Z, -LX + 4, LOBBY_TREAD_X + 12, -86, 15, 0.3, 0x4a8cff, null, 0.6);
+    bigText(Z, 'TRAIN SPEED', 36, new V3(-LX + 3.6, 28, -37), Math.PI / 2, ['#ffffff', '#8ae8ff']);
+    for (const spot of TREAD_SPOTS) if (spot.zone === -1) treadmill(Z, spot);
 }
 
 // ----- WINS SHOP: a row of shoe pedestals along the west wall (+x), "+1 Speed / 1 Wins Required" -----
@@ -554,9 +564,9 @@ function shoeLines(d) {
 function buildWinsShop(Z) {
     const x = LX - 12;
     // Raised ledge along the wall with dark pads
-    studBox(Z, 18, 1.6, 120, x + 2, 0.8, -36, 0x6a5aa8);
-    bigText(Z, 'WINS SHOP', 40, new V3(LX - 0.6, 30, -36), -Math.PI / 2, ['#ffffff', '#ffe36b']);
-    const cup = trophy(2.6); cup.position.set(LX - 1.2, 22, -8); zoneGroup(Z).add(cup);
+    studBox(Z, 18, 1.6, 116, x + 2, 0.8, -35, 0x6a5aa8);
+    bigText(Z, 'WINS SHOP', 36, new V3(LX - 3.6, 28, -37), -Math.PI / 2, ['#ffffff', '#ffe36b']);
+    const cup = trophy(2.6); cup.position.set(LX - 4, 22.5, -12); zoneGroup(Z).add(cup);
     SHOES.forEach((d, i) => {
         const z = -88 + i * 9.6, top = 1.6;
         roundBox(Z, 7.6, 0.6, 7.6, x, top + 0.3, z, candy(0x22203a, { rough: 0.35 }), 0.3);
