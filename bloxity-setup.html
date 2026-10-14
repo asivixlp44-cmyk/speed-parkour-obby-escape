@@ -46,7 +46,7 @@ ol.steps { padding-left: 20px; margin: 0; } ol.steps li { margin: 6px 0; }
     <div class="card">
     <div class="field"><div class="label">Slug *</div><div class="val mono">speed-parkour-obby-escape</div><button class="copy" data-v="speed-parkour-obby-escape">Copy</button></div>
     <div class="field"><div class="label">Name *</div><div class="val">+1 Speed Parkour Obby Escape</div><button class="copy" data-v="+1 Speed Parkour Obby Escape">Copy</button></div>
-    <div class="field"><div class="label">SEO Name (optional)</div><div class="val">+1 Speed Parkour Obby Escape - Wall Run, Slide &amp; Super Jump | Free 3D Obby Game</div><button class="copy" data-v="+1 Speed Parkour Obby Escape - Wall Run, Slide &amp; Super Jump | Free 3D Obby Game">Copy</button></div>
+    <div class="field"><div class="label">SEO Name (optional)</div><div class="val">+1 Speed Parkour Obby Escape - Free 3D Parkour Obby Game</div><button class="copy" data-v="+1 Speed Parkour Obby Escape - Free 3D Parkour Obby Game">Copy</button></div>
     <div class="field"><div class="label">Developer</div><div class="val">&#9745; Show developer (your choice)</div><span></span></div>
     <div class="field"><div class="label">Game Source *</div><div class="val">Choose <b>External URL</b> (not Upload ZIP): the game is hosted by Legion.</div><span></span></div>
     <div class="field"><div class="label">Game URL</div><div class="val mono">https://speed-parkour-obby-escape.play.bloxity.io/</div><button class="copy" data-v="https://speed-parkour-obby-escape.play.bloxity.io/">Copy</button></div>
@@ -66,26 +66,46 @@ speed-parkour-obby-escape.host.bloxity.io">Copy</button></div>
         <tr><td>SDK Support</td><td class="on">&#9745; ON</td><td class="why">The game loads the Bloxity SDK (login, avatars, friends, chat, emotes).</td></tr>
         <tr><td>LoadingEnd Support</td><td class="on">&#9745; ON</td><td class="why">The game calls loadingEnd() as soon as it has joined a server.</td></tr>
         <tr><td>Active</td><td class="on">&#9745; ON</td><td class="why">So players can find it.</td></tr>
-        <tr><td>Show Chat</td><td class="on">&#9745; ON</td><td class="why">Chat bubbles appear over players.</td></tr>
-        <tr><td>Show Voice</td><td class="on">&#9745; ON</td><td class="why">Fine for a social game.</td></tr>
+        <tr><td>Disable from Discovery</td><td class="off">&#9744; OFF</td><td class="why">We want it on the homepage and in search.</td></tr>
+        <tr><td>Disable on New Games category</td><td class="off">&#9744; OFF</td><td class="why">Let it show in New Games.</td></tr>
+        <tr><td>Add to Pre Release category</td><td class="off">&#9744; OFF</td><td class="why">It is a full release.</td></tr>
+        <tr><td>Under Maintenance</td><td class="off">&#9744; OFF</td><td class="why">The server is live.</td></tr>
+        <tr><td>Show Boxity Chat</td><td class="on">&#9745; ON</td><td class="why">Chat bubbles appear over players.</td></tr>
+        <tr><td>In-game Voice</td><td class="on">&#9745; ON</td><td class="why">The game reports its room through the SDK, so voice works per room.</td></tr>
+        <tr><td>Show Missions Button</td><td class="off">&#9744; OFF</td><td class="why">No Bloxity missions are set up for this game (the button would open an empty panel).</td></tr>
         <tr><td>Mobile Force Landscape</td><td class="on">&#9745; ON</td><td class="why">The joystick, JUMP and the Super Jump / Dash / Slide buttons need the width.</td></tr>
+        <tr><td>Disable for CG</td><td class="off">&#9744; OFF</td><td class="why">Fine on CrazyGames surfaces.</td></tr>
+        <tr><td>Disable for MSN</td><td class="off">&#9744; OFF</td><td class="why">Fine on MSN surfaces.</td></tr>
+        <tr><td>Enable New ESC Menu</td><td class="on">&#9745; ON</td><td class="why">The game reports its room id, so the 'In this server' player grid works.</td></tr>
     </tbody></table></div>
     <div class="card" style="margin-top:12px">
     <div class="field"><div class="label">Engine</div><div class="val">three.js (only an admin can set this)</div><span></span></div>
     <div class="field"><div class="label">Page Layout</div><div class="val">Classic</div><span></span></div>
     </div>
 
-    <h2>Tags</h2>
-    <div class="card"><div class="tags"><span class="tag">+1 Games</span><span class="tag">Obby</span><span class="tag">Parkour</span><span class="tag">Platformer</span><span class="tag">Speed</span><span class="tag">Running</span><span class="tag">Simulation</span><span class="tag">Idle</span><span class="tag">Multiplayer</span><span class="tag">3D</span><span class="tag">Casual</span><span class="tag">Arcade</span><span class="tag">Upgrades</span><span class="tag">Roblox-style</span><span class="tag">Kids</span><span class="tag">Social</span><span class="tag">Adventure</span><span class="tag">Free</span></div></div>
+    <h2>Cover Images &amp; Media</h2>
+    <div class="card">
+    <div class="field"><div class="label">Landscape 16:9 (1920x1080) *</div><div class="val">Your own cover image.</div><span></span></div>
+    <div class="field"><div class="label">Square 1:1 (800x800) *</div><div class="val">Your own square image.</div><span></span></div>
+    <div class="field"><div class="label">Preview Video (optional)</div><div class="val">Optional: a short gameplay clip (they cut it to 10 s).</div><span></span></div>
+    <div class="field"><div class="label">CG Thumbnail (optional)</div><div class="val"><span style="color:var(--off)">Leave empty (the cover is used)</span></div><span></span></div>
+    <div class="field"><div class="label">YouTube / Discord / X links</div><div class="val"><span style="color:var(--off)">Leave empty (or your own links)</span></div><span></span></div>
+    <div class="field"><div class="label">All Rooms Backend URL</div><div class="val"><span style="color:var(--off)">Leave empty (the server has no all-rooms endpoint)</span></div><span></span></div>
+    <div class="field"><div class="label">Screenshots</div><div class="val">Your own screenshots (up to 10).</div><span></span></div>
+    </div>
+
+    <h2>Tags <small>(click these in the tag bank, 18 of max 20)</small></h2>
+    <div class="card"><div class="tags"><span class="tag">+1 Games</span><span class="tag">Obby</span><span class="tag">Parkour</span><span class="tag">Platformer</span><span class="tag">Climbing</span><span class="tag">Action</span><span class="tag">Adventure</span><span class="tag">Arcade</span><span class="tag">Simulation</span><span class="tag">Multiplayer</span><span class="tag">3D</span><span class="tag">Roblox-style</span><span class="tag">Fast-paced</span><span class="tag">Casual</span><span class="tag">Kid-friendly</span><span class="tag">Skill-based</span><span class="tag">Leaderboards</span><span class="tag">Replayable</span></div></div>
 
     <h2>In-App Purchases <small>(none)</small></h2>
     <div class="card">
     <div class="field"><div class="label">IAPs</div><div class="val">Leave empty. Everything (shoes, treadmills, x2 Speed, Speed packs, revives) is bought with Wins inside the game.</div><span></span></div>
-    <div class="field"><div class="label">Default Webhook URL</div><div class="val"><span style="color:var(--off)">Leave empty (no purchases, no webhook)</span></div><span></span></div>
+    <div class="field"><div class="label">Default Webhook URL</div><div class="val"><b>Delete</b> anything already in the box (the form may show another game's webhook). Leave it empty: no purchases, no webhook.</div><span></span></div>
     </div>
 
     <h2>Release</h2>
     <div class="card">
+    <div class="field"><div class="label">A/B Testing</div><div class="val"><span style="color:var(--off)">Nothing now (only after the game is created)</span></div><span></span></div>
     <div class="field"><div class="label">Release date &amp; time</div><div class="val">Click <b>Clear</b> so it publishes as soon as it is Active.</div><span></span></div>
     </div>
     <p class="sub" style="margin-top:10px">Then click <b>Create Game</b>. Use your own cover and screenshot images.</p>
