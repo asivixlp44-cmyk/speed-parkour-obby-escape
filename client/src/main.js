@@ -488,8 +488,8 @@ function playerUid() {
     return uid;
 }
 
-async function connect(name) {
-    const client = new Client(await serverEndpoint());
+async function connect(name, endpoint) {
+    const client = new Client(endpoint || await serverEndpoint());
     const id = BX.identity();
     const room = await client.joinOrCreate('parkour', {
         uid: playerUid(), name: name || id.name, token: id.token, av: packAvatar(BX.currentAvatar()),
@@ -1114,10 +1114,14 @@ function frame(now) {
 // The server join starts right away and runs while the world is being built.
 let joining = false, joinTask = null, worldReady = null;
 async function joinServer() {
-    await waitForLogin(1200);
+    // Ask the Bloxity matchmaker for a server straight away (it can take a few seconds) while a
+    // Bloxity login gets a short moment to arrive; a login that comes later upgrades the session
+    const endpointTask = serverEndpoint();
+    endpointTask.catch(() => {});
+    await waitForLogin(400);
     const saved = (storageGet('spo_name') || '').slice(0, 20);
     for (let attempt = 0; ; attempt++) {
-        try { return await connect(BX.identity().loggedIn ? '' : saved); } catch (e) {
+        try { return await connect(BX.identity().loggedIn ? '' : saved, attempt === 0 ? await endpointTask : null); } catch (e) {
             if (attempt >= 4) throw e;
             console.warn('[join] attempt', attempt + 1, 'failed:', e && e.message);
             $('#loading').textContent = 'Waking up a server…';
