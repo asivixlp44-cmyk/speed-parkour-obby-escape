@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const T = THREE;
@@ -82,17 +81,14 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-// Image-based light from a soft studio room, so the glossy keycaps and candy get gentle
-// reflections on every side; the sun adds direction and soft shadows on top
-{
-    const pm = new T.PMREMGenerator(renderer);
-    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environmentIntensity = 0.45;
-    pm.dispose();
-}
-export const hemi = new T.HemisphereLight(0xf2eeff, 0x6a5a98, 0.95);
-scene.add(hemi);
-export const sun = new T.DirectionalLight(0xfff2e6, 1.9);
+// No image-based environment map: building one (PMREM blur shaders) froze slow PCs for about two
+// seconds at load. A stronger sky / ground hemisphere light gives the same soft fill instead, and
+// the sun adds direction and shadows on top.
+// Tuned so the matte lobby matches the reference video (floor about #8c7bb6) with dark shaded sides
+export const hemi = new T.HemisphereLight(0xf2eeff, 0x6a5a98, 2.2);
+export const ambient = new T.AmbientLight(0xffffff, 0.35);
+scene.add(hemi, ambient);
+export const sun = new T.DirectionalLight(0xfff2e6, 3.0);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 340 });
@@ -103,16 +99,23 @@ scene.add(sun, sun.target);
 
 // ----- materials & textures -----
 export const UNIT = new T.BoxGeometry(1, 1, 1);
-// Neon is pushed well above 1.0 so only it crosses the bloom threshold (fx.js)
-export const NEON_BOOST = 3.0;
+// Glowing parts are drawn unlit and a little brighter than their colour (there is no bloom)
+export const NEON_BOOST = 1.25;
 const matCache = new Map();
-// Plastic-like PBR (Roblox "SmoothPlastic"): a little sheen from the environment, no metal
+// Flat plastic in one colour (Roblox-style), matte
+// Matte, non-reflective plastic (Lambert): cheap to draw and no specular gloss or reflections.
+// Takes MeshStandardMaterial-style parameters and drops the ones a matte material doesn't have.
+export function matte(p) {
+    p = { ...(p || {}) };
+    for (const k of ['roughness', 'metalness', 'clearcoat', 'clearcoatRoughness']) delete p[k];
+    return new T.MeshLambertMaterial(p);
+}
 export function mat(color, o) {
     o = o || {};
     const key = color + '|' + (o.neon ? 1 : 0) + '|' + (o.opacity || 1) + '|' + (o.rough ?? '') + '|' + (o.side || 0);
     let m = matCache.get(key);
     if (!m) {
-        m = o.neon ? new T.MeshBasicMaterial({ color }) : new T.MeshStandardMaterial({ color, roughness: o.rough ?? 0.55, metalness: 0 });
+        m = o.neon ? new T.MeshBasicMaterial({ color }) : new T.MeshLambertMaterial({ color });
         // Neon is HDR (brighter than 1) so the bloom pass picks it up
         if (o.neon) m.color.multiplyScalar(NEON_BOOST * (o.boost ? o.boost / 1.4 : 1));
         if (o.opacity && o.opacity < 1) { m.transparent = true; m.opacity = o.opacity; m.depthWrite = false; }
@@ -128,8 +131,8 @@ export function candy(color, o) {
     let m = matCache.get(key);
     if (!m) {
         m = o.clear
-            ? new T.MeshPhysicalMaterial({ color, roughness: o.rough ?? 0.18, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12 })
-            : new T.MeshStandardMaterial({ color, roughness: o.rough ?? 0.22, metalness: 0 });
+            ? new T.MeshLambertMaterial({ color })
+            : new T.MeshLambertMaterial({ color });
         if (o.map) m.map = o.map;
         if (o.emissive) { m.emissive = new T.Color(o.emissive); m.emissiveIntensity = o.emissiveIntensity ?? 0.6; }
         matCache.set(key, m);
@@ -180,6 +183,17 @@ const STUD_TEX = (() => {
 })();
 // Studded plastic in a colour. UVs in world units / 8 (one tile = 8 x 8 studs): use the default
 // repeat with world-scaled UVs, or o.rx / o.ry to repeat the tile on plain 0..1 UVs.
+// Studded plastic for the merged world boxes: one material for every colour (the colour is in the
+// vertices), sharing the stud textures, so the whole world needs only a couple of materials
+export function studVCMaterial(rough) {
+    const key = 'studvc|' + rough;
+    let m = matCache.get(key);
+    if (!m) {
+        m = matte({ color: 0xffffff, vertexColors: true, map: STUD_TEX.map, normalMap: STUD_TEX.nrm, normalScale: new T.Vector2(0.6, 0.6) });
+        matCache.set(key, m);
+    }
+    return m;
+}
 export function studMaterial(color, o) {
     o = o || {};
     const rx = Math.max(1, Math.round(o.rx || 1)), ry = Math.max(1, Math.round(o.ry || 1));
@@ -188,7 +202,7 @@ export function studMaterial(color, o) {
     if (!m) {
         const map = STUD_TEX.map.clone(), nrm = STUD_TEX.nrm.clone();
         for (const t of [map, nrm]) { t.repeat.set(rx, ry); t.needsUpdate = true; }
-        m = new T.MeshStandardMaterial({ color, map, normalMap: nrm, normalScale: new T.Vector2(0.6, 0.6), roughness: o.rough ?? 0.5, metalness: 0 });
+        m = matte({ color, map, normalMap: nrm, normalScale: new T.Vector2(0.6, 0.6) });
         matCache.set(key, m);
     }
     return m;

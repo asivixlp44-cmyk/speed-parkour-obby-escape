@@ -89,7 +89,7 @@ function loadObj(slotDir, texDir, id) {
     return objCache.get(key).then(([obj, tex]) => {
         if (!obj) return null;
         const o = obj.clone(true);
-        o.traverse((c) => { if (c.isMesh) { c.material = new T.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }); c.castShadow = true; } });
+        o.traverse((c) => { if (c.isMesh) { c.material = new T.MeshLambertMaterial({ map: tex }); c.castShadow = true; } });
         return o;
     });
 }
@@ -138,7 +138,7 @@ export class BloxAvatar {
         model.traverse((c) => {
             if (c.isSkinnedMesh) {
                 if (!skeleton) skeleton = c.skeleton;
-                c.material = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0 });
+                c.material = new T.MeshLambertMaterial({ color: 0xffffff });
                 c.castShadow = true;
                 c.frustumCulled = false;
                 for (const [slot, name] of Object.entries(PART_MESH_NAMES)) {
@@ -163,8 +163,11 @@ export class BloxAvatar {
             skeleton.bones.forEach((b, i) => { if (b.name === 'Neck_Offset') this.neckOffsetBindY = skeleton.boneInverses[i].clone().invert().elements[13]; });
             this.patchSkeleton(model);
         }
-        // Normalise to the game's character height, feet on y = 0
-        const box = new T.Box3().setFromObject(model);
+        // Normalise to the game's character height, feet on y = 0. Measuring a skinned model walks
+        // every vertex through its bones (over a second on a slow PC), and every avatar is the same
+        // base model, so it is measured once and remembered.
+        if (!gltf.userData.restBox) gltf.userData.restBox = new T.Box3().setFromObject(model);
+        const box = gltf.userData.restBox;
         const h = box.getSize(new V3()).y || 1;
         this.baseScale = TARGET_HEIGHT / h;
         this.footOffset = -box.min.y * this.baseScale;

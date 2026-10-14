@@ -1,6 +1,6 @@
 // Small models used around the world: the sneakers in the WINS SHOP and OP Shoes stands, the
 // golden trophy over the Wins pads, little wings for the winged shoes.
-import { T, candy, mat } from './engine.js';
+import { T, candy, mat, matte } from './engine.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const G = {
@@ -74,9 +74,10 @@ export const TROPHY_GEO = (() => {
     g.computeVertexNormals();
     return g;
 })();
-export const GOLD = new T.MeshStandardMaterial({ color: 0xffc828, roughness: 0.22, metalness: 0.85, emissive: 0x6a4000, emissiveIntensity: 0.25 });
+// Matte gold with a warm glow (no reflections)
+export const GOLD = matte({ color: 0xffc828, emissive: 0x8a5a00, emissiveIntensity: 0.4 });
 // The red cup inside the reference's trophies
-export const CUP_RED = new T.MeshStandardMaterial({ color: 0xe8202a, roughness: 0.3, metalness: 0.2 });
+export const CUP_RED = matte({ color: 0xe8202a });
 export function trophy(scale) {
     const g = new T.Group();
     const m = new T.Mesh(TROPHY_GEO, GOLD); m.castShadow = true; g.add(m);

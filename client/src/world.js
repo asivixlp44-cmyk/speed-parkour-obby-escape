@@ -1,5 +1,5 @@
 import {
-    T, V3, scene, mat, candy, studMaterial, aabb, solids, kills, triggers, tickers,
+    T, V3, scene, mat, matte, candy, studMaterial, studVCMaterial, aabb, solids, kills, triggers, tickers,
     texFrom, billboard, textPlane, camera,
 } from './engine.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -46,21 +46,62 @@ export function cullZones(stage) {
 
 // ----- static geometry, merged per zone and material at the end -----
 const geoBatches = new Map();
-function addGeo(zone, geo, material, cast) {
+function batchFor(zone, material, cast) {
     const k = zone + '|' + material.uuid + '|' + (cast ? 1 : 0);
     let b = geoBatches.get(k);
-    if (!b) { b = { zone, material, cast, list: [] }; geoBatches.set(k, b); }
+    if (!b) { b = { zone, material, cast, list: [], pos: [], nrm: [], uv: [], idx: [], col: [] }; geoBatches.set(k, b); }
+    return b;
+}
+function addGeo(zone, geo, material, cast) {
+    const b = batchFor(zone, material, cast);
     for (const name of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(name)) geo.deleteAttribute(name);
     if (!geo.index) { const idx = []; for (let i = 0; i < geo.attributes.position.count; i++) idx.push(i); geo.setIndex(idx); }
     b.list.push(geo);
 }
+// Axis-aligned boxes are written straight into their batch's vertex arrays (the same faces, order
+// and UVs as THREE.BoxGeometry), so building the world makes no geometry objects and merges
+// nothing: thousands of boxes cost a few milliseconds. uvDiv: UVs in world units / uvDiv (studs),
+// or 0 for plain 0..1 UVs per face.
+// Per face: u axis, v axis, w axis, u dir, v dir, w sign, and which size goes along u / v
+const BOX_FACES = [[2, 1, 0, -1, -1, 1, 2, 1], [2, 1, 0, 1, -1, -1, 2, 1], [0, 2, 1, 1, 1, 1, 0, 2], [0, 2, 1, 1, -1, -1, 0, 2], [0, 1, 2, 1, -1, 1, 0, 1], [0, 1, 2, -1, -1, -1, 0, 1]];
+const vcTmp = new T.Color();
+function addBoxFast(zone, material, cast, sx, sy, sz, x, y, z, uvDiv, color) {
+    const b = batchFor(zone, material, cast);
+    if (color !== undefined) vcTmp.set(color);
+    const size = [sx, sy, sz], c = [x, y, z], v = [0, 0, 0], n = [0, 0, 0];
+    for (const [u, vv, w, ud, vd, ws, su, sv] of BOX_FACES) {
+        const base = b.pos.length / 3;
+        const wu = size[u], hv = size[vv], dw = size[w] / 2 * ws;
+        const us = uvDiv ? size[su] / uvDiv : 1, vs = uvDiv ? size[sv] / uvDiv : 1;
+        for (let iy = 0; iy < 2; iy++) for (let ix = 0; ix < 2; ix++) {
+            v[u] = (ix * wu - wu / 2) * ud; v[vv] = (iy * hv - hv / 2) * vd; v[w] = dw;
+            b.pos.push(v[0] + c[0], v[1] + c[1], v[2] + c[2]);
+            n[0] = n[1] = n[2] = 0; n[w] = ws;
+            b.nrm.push(n[0], n[1], n[2]);
+            b.uv.push(ix * us, (1 - iy) * vs);
+            if (color !== undefined) b.col.push(vcTmp.r, vcTmp.g, vcTmp.b);
+        }
+        b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
+    }
+}
 function flushGeo() {
     for (const b of geoBatches.values()) {
-        const mesh = new T.Mesh(mergeGeometries(b.list), b.material);
+        const parts = [...b.list];
+        if (b.pos.length) {
+            const g = new T.BufferGeometry();
+            g.setAttribute('position', new T.Float32BufferAttribute(b.pos, 3));
+            g.setAttribute('normal', new T.Float32BufferAttribute(b.nrm, 3));
+            g.setAttribute('uv', new T.Float32BufferAttribute(b.uv, 2));
+            if (b.col.length) g.setAttribute('color', new T.Float32BufferAttribute(b.col, 3));
+            g.setIndex(b.idx);
+            parts.push(g);
+        }
+        const geo = parts.length === 1 ? parts[0] : mergeGeometries(parts);
+        const mesh = new T.Mesh(geo, b.material);
         mesh.receiveShadow = true; mesh.castShadow = !!b.cast;
         mesh.matrixAutoUpdate = false;
         zoneGroup(b.zone).add(mesh);
-        for (const g of b.list) g.dispose();
+        if (parts.length > 1) for (const g of parts) g.dispose();
     }
     geoBatches.clear();
 }
@@ -74,15 +115,7 @@ function solid(zone, x, y, z, sx, sy, sz, extra) {
 // Box with Roblox studs: UVs in world units / 8 so the stud tile keeps its size on any face
 function studBox(zone, sx, sy, sz, x, y, z, color, o) {
     o = o || {};
-    const g = new T.BoxGeometry(sx, sy, sz);
-    const uv = g.attributes.uv;
-    const faces = [[sz, sy], [sz, sy], [sx, sz], [sx, sz], [sx, sy], [sx, sy]];
-    for (let f = 0; f < 6; f++) for (let v = 0; v < 4; v++) {
-        const i = f * 4 + v;
-        uv.setXY(i, uv.getX(i) * faces[f][0] / 12, uv.getY(i) * faces[f][1] / 12);
-    }
-    g.translate(x, y, z);
-    addGeo(zone, g, studMaterial(color, { rough: o.rough ?? 0.42 }), o.cast);
+    addBoxFast(zone, studVCMaterial(o.rough ?? 0.42), o.cast, sx, sy, sz, x, y, z, 12, color);
     if (o.solid !== false) return solid(zone, x, y, z, sx, sy, sz, o.extra);
     return null;
 }
@@ -90,12 +123,14 @@ function studBox(zone, sx, sy, sz, x, y, z, color, o) {
 const floor = (zone, x0, x1, z0, z1, top, color, extra, thick) => studBox(zone, x1 - x0, thick || 4, z1 - z0, (x0 + x1) / 2, top - (thick || 4) / 2, (z0 + z1) / 2, color, { extra });
 function plainBox(zone, sx, sy, sz, x, y, z, material, o) {
     o = o || {};
-    const g = new T.BoxGeometry(sx, sy, sz);
-    if (o.rx) g.rotateX(o.rx);
-    if (o.rz) g.rotateZ(o.rz);
-    if (o.ry) g.rotateY(o.ry);
-    g.translate(x, y, z);
-    addGeo(zone, g, material, o.cast);
+    if (o.rx || o.rz || o.ry) {
+        const g = new T.BoxGeometry(sx, sy, sz);
+        if (o.rx) g.rotateX(o.rx);
+        if (o.rz) g.rotateZ(o.rz);
+        if (o.ry) g.rotateY(o.ry);
+        g.translate(x, y, z);
+        addGeo(zone, g, material, o.cast);
+    } else addBoxFast(zone, material, o.cast, sx, sy, sz, x, y, z, 0);
     if (o.solid) return solid(zone, x, y, z, sx, sy, sz, o.extra);
     return null;
 }
@@ -264,7 +299,7 @@ const beamGeo = new T.PlaneGeometry(1, 1);
 function laserBeam(zone, color, width) {
     const grp = new T.Group();
     const m = new T.MeshBasicMaterial({ map: beamTexture(), color, transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, toneMapped: false });
-    m.color.multiplyScalar(3);
+    m.color.multiplyScalar(1.6);
     const a = new T.Mesh(beamGeo, m), b = new T.Mesh(beamGeo, m);
     b.rotation.x = Math.PI / 2;
     grp.add(a, b);
@@ -314,11 +349,11 @@ function buildLobby() {
     // Floor
     floor(Z, -LX, LX, LZ0, LZ1, 0, C.floor);
     // Cyan arrow carpet from behind the spawn to the Stage 1 door (reference)
-    carpetMat = new T.MeshStandardMaterial({ map: carpetTexture(), roughness: 0.45, emissive: 0x2a7ab0, emissiveIntensity: 0.1 });
+    carpetMat = matte({ map: carpetTexture(), roughness: 0.45, emissive: 0x2a7ab0, emissiveIntensity: 0.1 });
     const carpet = new T.Mesh(uvPlane(24, LZ1 - (SPAWN.z - 14), 12, 12), carpetMat);
     carpet.rotation.x = -Math.PI / 2; carpet.position.set(0, 0.05, (LZ1 + SPAWN.z - 14) / 2); carpet.receiveShadow = true; g.add(carpet);
     // Spawn pad: white with the black star
-    const sp = new T.Mesh(new T.BoxGeometry(14, 0.5, 14), [mat(C.white), mat(C.white), new T.MeshStandardMaterial({ map: spawnTexture(), roughness: 0.4 }), mat(C.white), mat(C.white), mat(C.white)]);
+    const sp = new T.Mesh(new T.BoxGeometry(14, 0.5, 14), [mat(C.white), mat(C.white), matte({ map: spawnTexture(), roughness: 0.4 }), mat(C.white), mat(C.white), mat(C.white)]);
     sp.position.set(SPAWN.x, 0.25, SPAWN.z); sp.receiveShadow = true; g.add(sp);
     solid(Z, SPAWN.x, 0.25, SPAWN.z, 14, 0.5, 14);
 
@@ -515,7 +550,7 @@ function treadmill(Z, spot) {
     // Frame round the belt (lavender studs, or the treadmill's colour)
     studBox(Z, sx(g.width + 2.4, g.len + 2.4), g.top, sz(g.width + 2.4, g.len + 2.4), cx, y + g.top / 2 - 0.15, cz, frameC === 0xffffff ? 0xe8e8f8 : frameC, { solid: false });
     solid(Z, cx, y + g.top / 2 - 0.15, cz, sx(g.width + 2.4, g.len + 2.4), g.top - 0.3, sz(g.width + 2.4, g.len + 2.4));
-    const belt = new T.Mesh(new T.BoxGeometry(g.width, 0.3, g.len), new T.MeshStandardMaterial({ map: beltTex, roughness: 0.6 }));
+    const belt = new T.Mesh(new T.BoxGeometry(g.width, 0.3, g.len), matte({ map: beltTex, roughness: 0.6 }));
     belt.position.set(cx, top + 0.15, cz); belt.rotation.y = alongX ? Math.PI / 2 : 0; belt.receiveShadow = true; zoneGroup(Z).add(belt);
     solid(Z, cx, top, cz, sx(g.width, g.len), 0.3, sz(g.width, g.len), { tread: def, treadDir: alongX ? { x: d, z: 0 } : { x: 0, z: d } });
     for (const s of [-1, 1]) {
@@ -645,7 +680,7 @@ function gateBoard(Z, s, w, h, pos, yaw) {
 // top bar (as in the reference)
 function stageGate(s, z, y, Z) {
     const stripe = stripeTexture(0x16121f, 0xffd028, 4);
-    const sm = new T.MeshStandardMaterial({ map: stripe, roughness: 0.4 });
+    const sm = matte({ map: stripe, roughness: 0.4 });
     for (const sx of [-1, 1]) studBox(Z, 3, 26, 3, sx * (HW - 1.5), y + 13, z, C.pillar, { cast: false });
     const bar = new T.Mesh(new T.BoxGeometry(HALL_W, 2.4, 3), sm); bar.position.set(0, y + 25, z); zoneGroup(Z).add(bar);
     roundBox(Z, 20, 10.4, 1.4, 0, y + 18.2, z, candy(C.navyDeep, { rough: 0.35 }), 0.4);
@@ -667,7 +702,7 @@ function slideBlock(Z, x0, x1, z0, z1, y, top, board, text) {
 // ----- crushers: yellow-black striped blocks on white pistons, slamming onto a red zone -----
 function crusher(Z, z, y, w, d, period, phase) {
     const stripe = stripeTexture(0x16121f, 0xffd028, 5).clone(); stripe.needsUpdate = true; stripe.repeat.set(5, 1);
-    const sideM = new T.MeshStandardMaterial({ map: stripe, roughness: 0.4 });
+    const sideM = matte({ map: stripe, roughness: 0.4 });
     const grp = new T.Group(); zoneGroup(Z).add(grp);
     const block = new T.Mesh(new T.BoxGeometry(w, 3.2, d), [sideM, sideM, mat(0x2a2440), mat(0x2a2440), sideM, sideM]);
     block.castShadow = true; grp.add(block);
@@ -939,18 +974,44 @@ export function updateWorld(dt, stage, tOverride) {
     const t = tOverride ?? net.now() / 1000;
     for (const h of hazards) if (h.zone === -1 || Math.abs(h.zone - Math.max(0, stage)) <= 1) h.update(t, dt);
 }
-export function buildWorld() {
-    chevMat = new T.MeshStandardMaterial({ map: chevronTexture(), roughness: 0.4, emissive: 0xffffff, emissiveMap: chevronTexture(), emissiveIntensity: 0.55 });
-    glassMat = new T.MeshStandardMaterial({ map: glassTexture(), roughness: 0.15, metalness: 0.1, emissive: 0x1a8ae0, emissiveIntensity: 0.55 });
+// Built in slices with a pause between them (pause() returns a promise), so the page stays
+// responsive and the server connection that runs alongside keeps moving.
+export async function buildWorld(pause) {
+    pause = pause || (() => Promise.resolve());
+    chevMat = matte({ map: chevronTexture(), roughness: 0.4, emissive: 0xffffff, emissiveMap: chevronTexture(), emissiveIntensity: 0.55 });
+    glassMat = matte({ map: glassTexture(), roughness: 0.15, metalness: 0.1, emissive: 0x1a8ae0, emissiveIntensity: 0.55 });
     beltTex = beltTexture();
     scrolling.push({ tex: beltTex, u: 0, v: -1.4 });
     buildLobby();
-    STAGES.forEach((s) => buildStage(s));
+    await pause();
+    for (const s of STAGES) { buildStage(s); await pause(); }
     buildClouds();
     flushGeo();
     refreshShop();
     drawEventBoard();
     cullZones(-1);
+}
+// Every shader the world needs is compiled in the background (parallel compile, the page keeps
+// running), then every texture is sent to the GPU a few at a time, so nothing stalls the first
+// frames. All zones are shown while compiling so every material is seen.
+export async function warmUp(renderer, camera, pause, target) {
+    const vis = [...zoneGroups.values()].map((g) => [g, g.visible]);
+    for (const [g] of vis) g.visible = true;
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(target || null);
+    try { await renderer.compileAsync(scene, camera); } catch (e) { renderer.compile(scene, camera); }
+    renderer.setRenderTarget(prev);
+    for (const [g, v] of vis) g.visible = v;
+    const texs = new Set();
+    scene.traverse((o) => {
+        const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        for (const m of ms) for (const k of ['map', 'normalMap', 'emissiveMap']) if (m[k]) texs.add(m[k]);
+    });
+    let n = 0;
+    for (const t of texs) {
+        renderer.initTexture(t);
+        if (++n % 24 === 0) await pause();
+    }
 }
 // Where a revive (or the QA hook) puts you at the start of stage i: the platform before it
 export function stageSpawn(i) {

@@ -1,53 +1,22 @@
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { T, V3, $, renderer, scene, camera, sun } from './engine.js';
 
 // ----- quality presets -----
+// No post-processing (bloom, colour grade) and no reflections in any preset: the scene is drawn
+// straight to the screen. The presets change the resolution and the shadows only.
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 export const QUALITIES = {
-    low: { label: 'Low', ratio: 0.85, shadows: false, bloom: false, shadowMap: 512 },
-    medium: { label: 'Medium', ratio: 1, shadows: true, bloom: true, shadowMap: 1024 },
-    high: { label: 'High', ratio: 1.5, shadows: true, bloom: true, shadowMap: 2048 },
+    low: { label: 'Low', ratio: 0.85, shadows: false, shadowMap: 512 },
+    medium: { label: 'Medium', ratio: 1, shadows: true, shadowMap: 1024 },
+    high: { label: 'High', ratio: 1.5, shadows: true, shadowMap: 2048 },
 };
-let quality = isTouch ? 'medium' : 'high';
-try { quality = localStorage.getItem('spo_quality') || quality; } catch (e) { /* default */ }
-if (!QUALITIES[quality]) quality = 'high';
+let quality = isTouch ? 'low' : 'medium';
+try { quality = localStorage.getItem('spo_quality2') || quality; } catch (e) { /* default */ }
+if (!QUALITIES[quality]) quality = 'medium';
 
-// Neon materials are HDR (brighter than 1) so only they cross the bloom threshold;
-// neutral tone mapping keeps every other colour close to its authored sRGB value.
+// Neutral tone mapping keeps every colour close to its authored sRGB value
 renderer.toneMapping = T.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 
-// Final grade, after tone mapping: a little more saturation and contrast (the punchy candy look),
-// a soft vignette and a faint pink lift in the shadows
-const GradeShader = {
-    uniforms: { tDiffuse: { value: null }, uSat: { value: 1.08 }, uContrast: { value: 1.1 }, uVignette: { value: 0.26 } },
-    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float uSat; uniform float uContrast; uniform float uVignette; varying vec2 vUv;
-        void main() {
-            vec4 c = texture2D(tDiffuse, vUv);
-            float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-            vec3 col = mix(vec3(l), c.rgb, uSat);
-            col = (col - 0.5) * uContrast + 0.5;
-            col += vec3(0.035, 0.0, 0.03) * (1.0 - smoothstep(0.0, 0.45, l));
-            vec2 q = vUv - 0.5;
-            col *= 1.0 - uVignette * smoothstep(0.35, 0.85, length(q * vec2(1.0, 0.85)) * 1.25);
-            gl_FragColor = vec4(clamp(col, 0.0, 1.0), c.a);
-        }`,
-};
-
-let composer = null, bloomPass = null;
-function buildComposer() {
-    composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    bloomPass = new UnrealBloomPass(new T.Vector2(innerWidth / 2, innerHeight / 2), 0.32, 0.38, 1.85);
-    composer.addPass(bloomPass);
-    composer.addPass(new OutputPass());
-    composer.addPass(new ShaderPass(GradeShader));
-}
 function applyQuality() {
     const q = QUALITIES[quality];
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.ratio));
@@ -58,7 +27,6 @@ function applyQuality() {
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
     }
     scene.traverse((o) => { if (o.material) { const m = Array.isArray(o.material) ? o.material : [o.material]; m.forEach((x) => { x.needsUpdate = true; }); } });
-    if (q.bloom && !composer) buildComposer();
     resizeFx();
 }
 export function getQuality() { return quality; }
@@ -69,24 +37,16 @@ export function setQuality(q, auto) {
     if (!QUALITIES[q]) return;
     if (!auto && q !== quality) autoAllowed = false;
     quality = q;
-    try { localStorage.setItem('spo_quality', q); } catch (e) { /* ignore */ }
+    try { localStorage.setItem('spo_quality2', q); } catch (e) { /* ignore */ }
     applyQuality();
 }
 function resizeFx() {
-    if (composer) {
-        composer.setPixelRatio(renderer.getPixelRatio());
-        composer.setSize(innerWidth, innerHeight);
-        bloomPass.resolution.set(innerWidth / 2, innerHeight / 2);
-    }
     lines.width = Math.round(innerWidth * Math.min(devicePixelRatio || 1, 1.5));
     lines.height = Math.round(innerHeight * Math.min(devicePixelRatio || 1, 1.5));
 }
 addEventListener('resize', resizeFx);
 
-export function render() {
-    if (QUALITIES[quality].bloom && composer) composer.render();
-    else renderer.render(scene, camera);
-}
+export function render() { renderer.render(scene, camera); }
 
 // ----- speed lines (2D overlay) -----
 const lines = $('#speedLines');
@@ -94,7 +54,9 @@ const lctx = lines.getContext('2d');
 const streaks = Array.from({ length: 70 }, () => ({ a: Math.random() * Math.PI * 2, r: Math.random(), l: 0.1 + Math.random() * 0.25, w: 1 + Math.random() * 2.5 }));
 let lineAmt = 0;
 export function setSpeedLines(target, dt) {
+    const was = lineAmt;
     lineAmt += (target - lineAmt) * Math.min(1, dt * 6);
+    if (lineAmt < 0.02 && was < 0.02) return;
     const w = lines.width, h = lines.height;
     lctx.clearRect(0, 0, w, h);
     if (lineAmt < 0.02) return;
@@ -330,52 +292,6 @@ export function updateFx(dt) {
         r.t -= dt;
         if (r.t <= 0) { burstFw(r.p, r.color); if (r.onBurst) r.onBurst(); rockets.splice(i, 1); }
     }
-}
-
-// ----- ambient glitter: sparkles drifting up all around the camera, tinted by the stage -----
-const AMB = 260;
-const ambGeo = new T.BufferGeometry();
-{
-    const pos = new Float32Array(AMB * 3), seed = new Float32Array(AMB);
-    for (let i = 0; i < AMB; i++) { pos[i * 3] = Math.random(); pos[i * 3 + 1] = Math.random(); pos[i * 3 + 2] = Math.random(); seed[i] = Math.random(); }
-    ambGeo.setAttribute('position', new T.BufferAttribute(pos, 3));
-    ambGeo.setAttribute('aSeed', new T.BufferAttribute(seed, 1));
-}
-const ambMat = new T.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false,
-    uniforms: { uTime: { value: 0 }, uCam: { value: new V3() }, uColor: { value: new T.Color(0xff8ad8) }, uSize: { value: 260 } },
-    vertexShader: `attribute float aSeed; uniform float uTime; uniform vec3 uCam; uniform float uSize; varying float vA; varying float vS;
-        void main() {
-            vec3 box = vec3(90.0, 60.0, 90.0);
-            vec3 p = position * box;
-            p.y += uTime * (1.2 + aSeed * 2.5);
-            p.x += sin(uTime * 0.5 + aSeed * 20.0) * 2.5;
-            vec3 rel = mod(p - uCam + box * 0.5, box) - box * 0.5;
-            vec4 mv = modelViewMatrix * vec4(uCam + rel, 1.0);
-            gl_Position = projectionMatrix * mv;
-            float tw = 0.5 + 0.5 * sin(uTime * (2.0 + aSeed * 3.0) + aSeed * 40.0);
-            vA = tw * smoothstep(44.0, 14.0, length(rel)) * smoothstep(2.0, 6.0, length(rel));
-            vS = aSeed;
-            gl_PointSize = uSize * (0.35 + aSeed * 0.65) * (0.6 + tw * 0.4) / max(1.0, -mv.z);
-        }`,
-    fragmentShader: `uniform vec3 uColor; varying float vA; varying float vS;
-        void main() {
-            vec2 q = gl_PointCoord - 0.5;
-            float core = pow(max(0.0, 1.0 - length(q) * 2.0), 2.0);
-            float rays = max(0.0, 1.0 - abs(q.x) * 12.0) * max(0.0, 1.0 - abs(q.y) * 2.4) + max(0.0, 1.0 - abs(q.y) * 12.0) * max(0.0, 1.0 - abs(q.x) * 2.4);
-            vec3 c = mix(uColor, vec3(1.0), 0.35 + 0.35 * sin(vS * 31.0));
-            gl_FragColor = vec4(c * 1.6, (core + rays * 0.55) * vA);
-        }`,
-});
-const ambient = new T.Points(ambGeo, ambMat);
-ambient.frustumCulled = false;
-ambient.renderOrder = 5;
-scene.add(ambient);
-const ambTmp = new T.Color();
-export function updateAmbient(camPos, t, color) {
-    ambMat.uniforms.uTime.value = t;
-    ambMat.uniforms.uCam.value.copy(camPos);
-    ambMat.uniforms.uColor.value.lerp(ambTmp.set(color), 0.03);
 }
 
 applyQuality();

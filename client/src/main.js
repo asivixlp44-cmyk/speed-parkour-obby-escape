@@ -9,9 +9,9 @@ import * as BX from './bloxity.js';
 import { createAvatar, loadBase, packAvatar, unpackAvatar, avatarStats } from './avatar.js';
 import { updateMaterials } from './textures.js';
 import { pad, pollGamepad, rumble, onGamepadConnection } from './gamepad.js';
-import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks, setQuality, getQuality, autoQualityAllowed, shoeFx, makeTrail, updateAmbient, dashBurst, superRing } from './fx.js';
+import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks, setQuality, getQuality, autoQualityAllowed, shoeFx, makeTrail, dashBurst, superRing } from './fx.js';
 import {
-    buildWorld, SPAWN, refreshShop, renderBoards, updateLobbySigns, updateWorld, cullZones, checkpoints, stageSpawn, poles, treadOwned,
+    buildWorld, warmUp, SPAWN, refreshShop, renderBoards, updateLobbySigns, updateWorld, cullZones, checkpoints, stageSpawn, poles, treadOwned,
 } from './world.js';
 import {
     updateHud, toast, levelUp, showStageTitle, showWin, showOof, animateCounters, openDailyOnJoin, refreshModal,
@@ -56,7 +56,7 @@ function setShoe(g, id) {
     u.shoeId = id || '';
     const d = shoeById[id];
     const shoes = u.body.userData.shoes || [];
-    for (const s of shoes) s.material = new T.MeshStandardMaterial({ color: d ? d.color : 0x141418, roughness: 0.35, emissive: d && d.glow ? d.glow : 0x000000, emissiveIntensity: d && d.glow ? 0.35 : 0 });
+    for (const s of shoes) s.material = new T.MeshLambertMaterial({ color: d ? d.color : 0x141418, emissive: d && d.glow ? d.glow : 0x000000, emissiveIntensity: d && d.glow ? 0.35 : 0 });
 }
 function setTrail(g, id) {
     const u = g.userData;
@@ -678,7 +678,6 @@ function updateCamera(dt) {
     const s = STAGES[P.stage], th = s ? THEMES[s.theme] : null;
     skyTint.set(th ? th.sky : FOG);
     updateSky(camera.position, t, skyTint, dt, s && (s.theme === 'night' || s.theme === 'neon') ? 1 : 0);
-    updateAmbient(camera.position, t, th ? th.accent : 0xb8a8ff);
 }
 
 // Controller buttons: popups and panels first, then gameplay
@@ -1106,39 +1105,44 @@ function frame(now) {
     if (!loadingSignaled) { loadingSignaled = true; BX.triggerAllSettings(); }
     pollGamepad();
     padButtons();
-    if (running) update(dt);
-    else { for (const fn of tickers) fn(dt, now / 1000); updateWorld(dt, -1); }
-    updateCamera(dt);
-    render();
+    // Nothing is drawn behind the loading screen: the page stays free to load and connect
+    if (running) { update(dt); updateCamera(dt); render(); }
     requestAnimationFrame(frame);
 }
 
 // Straight into the game: no menu. Joins with the Bloxity name (or guest name) automatically.
-let joining = false;
+// The server join starts right away and runs while the world is being built.
+let joining = false, joinTask = null, worldReady = null;
+async function joinServer() {
+    await waitForLogin(1200);
+    const saved = (storageGet('spo_name') || '').slice(0, 20);
+    for (let attempt = 0; ; attempt++) {
+        try { return await connect(BX.identity().loggedIn ? '' : saved); } catch (e) {
+            if (attempt >= 4) throw e;
+            console.warn('[join] attempt', attempt + 1, 'failed:', e && e.message);
+            $('#loading').textContent = 'Waking up a server…';
+            await new Promise((res) => setTimeout(res, 2000 * (attempt + 1)));
+        }
+    }
+}
 async function play() {
     if (joining || running) return;
     joining = true;
     const err = $('#connectErr'), retry = $('#playBtn');
     err.hidden = true; retry.hidden = true;
     $('#loading').hidden = false;
-    $('#loading').textContent = 'Joining…';
-    BX.loadingStep('Joining a server…');
+    if (!joinTask) joinTask = joinServer();
     initAudio();
     try {
-        await waitForLogin(1500);
-        const saved = (storageGet('spo_name') || '').slice(0, 20);
-        let room = null;
-        for (let attempt = 0; !room; attempt++) {
-            try { room = await connect(BX.identity().loggedIn ? '' : saved); } catch (e) {
-                if (attempt >= 4) throw e;
-                console.warn('[join] attempt', attempt + 1, 'failed:', e && e.message);
-                $('#loading').textContent = 'Waking up a server…';
-                await new Promise((res) => setTimeout(res, 2000 * (attempt + 1)));
-            }
-        }
+        await worldReady;
+        $('#loading').textContent = 'Joining…';
+        BX.loadingStep('Joining a server…');
+        const room = await joinTask;
         const me = room.state.players && room.state.players.get(room.sessionId);
         S.name = me ? me.name : S.name;
+        refreshShop();
     } catch (e) {
+        joinTask = null;
         console.error(e);
         joining = false;
         $('#loading').hidden = true;
@@ -1208,14 +1212,40 @@ function wirePortalEvents() {
     BX.onProportionsChanged(() => syncMyAvatar());
 }
 
+const pause = () => new Promise((r) => setTimeout(r, 0));
+async function prepareWorld() {
+    const step = (t) => { $('#loading').textContent = t; BX.loadingStep(t); };
+    step('Loading fonts…');
+    try { await Promise.race([Promise.all([document.fonts.load('700 40px Fredoka'), document.fonts.load('800 40px Montserrat')]), new Promise((r) => setTimeout(r, 2500))]); } catch (e) { /* fallback font */ }
+    step('Building the obby…');
+    await buildWorld(pause);
+    refreshNear(-1);
+    step('Preparing graphics…');
+    // From the spawn view, so the first frame needs nothing new
+    camera.position.set(0, 9, -60); camera.lookAt(0, 6, -38); camera.updateMatrixWorld();
+    await warmUp(renderer, camera, pause, null);
+    // A throw-away player model stands at the spawn for one hidden frame, so the character shaders
+    // (skinned, and their shadows) are ready too and joining doesn't stutter
+    try {
+        const base = await Promise.race([loadBase(), new Promise((r) => setTimeout(r, 4000))]);
+        const a = base ? await createAvatar(null) : null;
+        if (a) {
+            a.root.position.copy(SPAWN);
+            scene.add(a.root);
+            a.update(1 / 60, { t: 0 });
+            render();
+            scene.remove(a.root);
+            a.dispose();
+        } else render();
+    } catch (e) { render(); }
+}
 async function boot() {
     BX.initBloxity();
-    BX.loadingStep('Loading fonts…');
-    try { await Promise.race([Promise.all([document.fonts.load('700 40px Fredoka'), document.fonts.load('800 40px Montserrat')]), new Promise((r) => setTimeout(r, 2500))]); } catch (e) { /* fallback font */ }
-    BX.loadingStep('Building the obby…');
-    buildWorld();
-    refreshNear(-1);
+    // Join the server and load the player model while the world is being built
+    joinTask = joinServer();
+    joinTask.catch(() => {});
     loadBase().catch(() => {});
+    worldReady = prepareWorld();
     wirePortalSettings();
     wirePortalEvents();
     BX.onIdentity((id) => {
