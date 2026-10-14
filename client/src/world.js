@@ -1,6 +1,6 @@
 import {
     T, V3, scene, mat, matte, candy, studMaterial, studVCMaterial, aabb, solids, kills, triggers, tickers,
-    texFrom, billboard, textPlane, camera,
+    texFrom, sharedTex, billboard, textPlane, camera,
 } from './engine.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -200,8 +200,9 @@ function signCanvas(lines, W, H, o) {
     return cv;
 }
 function sign(zone, lines, w, h, pos, yaw, tilt) {
-    const cv = signCanvas(lines, 1024, Math.round(1024 * h / w));
-    const m = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ map: texFrom(cv), toneMapped: false }));
+    const H = Math.round(1024 * h / w);
+    const map = sharedTex('sign|' + H + '|' + JSON.stringify(lines), () => signCanvas(lines, 1024, H));
+    const m = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ map, toneMapped: false }));
     m.position.copy(pos); m.rotation.set(0, yaw || 0, tilt || 0);
     zoneGroup(zone).add(m);
     // Back of the board
@@ -213,6 +214,13 @@ function sign(zone, lines, w, h, pos, yaw, tilt) {
 }
 // Big outlined title text floating in the world (STAGE 2 over a platform, WINS SHOP ...)
 function bigText(zone, text, w, pos, yaw, colors, sub, subColor) {
+    const map = sharedTex('big|' + [text, colors, sub, subColor].join('|'), () => bigTextCanvas(text, colors, sub, subColor));
+    const m = new T.Mesh(new T.PlaneGeometry(w, w * map.image.height / 1024), new T.MeshBasicMaterial({ map, transparent: true, depthWrite: false, side: T.DoubleSide, toneMapped: false }));
+    m.position.copy(pos); m.rotation.y = yaw || 0;
+    zoneGroup(zone).add(m);
+    return m;
+}
+function bigTextCanvas(text, colors, sub, subColor) {
     const cv = document.createElement('canvas'); cv.width = 1024; cv.height = sub ? 300 : 200;
     const x = cv.getContext('2d');
     let px = 132;
@@ -229,10 +237,7 @@ function bigText(zone, text, w, pos, yaw, colors, sub, subColor) {
         x.lineWidth = 12; x.strokeText(sub, 512, 236);
         x.fillStyle = subColor || '#ffd028'; x.fillText(sub, 512, 236);
     }
-    const m = new T.Mesh(new T.PlaneGeometry(w, w * cv.height / 1024), new T.MeshBasicMaterial({ map: texFrom(cv), transparent: true, depthWrite: false, side: T.DoubleSide, toneMapped: false }));
-    m.position.copy(pos); m.rotation.y = yaw || 0;
-    zoneGroup(zone).add(m);
-    return m;
+    return cv;
 }
 function canvasPlane(zone, w, h, pxW, pxH, pos, yaw) {
     const cv = document.createElement('canvas'); cv.width = pxW; cv.height = pxH;
@@ -446,7 +451,7 @@ function buildChest(Z) {
     add(new RoundedBoxGeometry(9.2, 2.6, 6.2, 2, 0.7), bodyM, 0, 5.8, -0.3, -0.18);
     for (const sx of [-3, 0, 3]) add(new T.BoxGeometry(0.8, 5.2, 6.3), trimM, sx, 2.6, 0);
     add(new RoundedBoxGeometry(1.6, 1.8, 0.6, 2, 0.2), candy(0xffffff), 0, 3.9, 3.1);
-    billboard([{ t: 'OP REWARD!', c: '#ffd028', s: '#1c1530', px: 70 }, { t: 'Like + Join Group!', c: '#ffffff', s: '#1c1530', px: 50 }], 12, 512, new V3(x, 12, z), zoneGroup(Z));
+    billboard([{ t: 'OP REWARD!', c: '#ffd028', s: '#1c1530', px: 70 }, { t: 'Like + Join Group!', c: '#ffffff', s: '#1c1530', px: 50 }], 12, 512, new V3(x, 12, z), zoneGroup(Z), true);
     solids.push(Object.assign(aabb(x, 3, z, 9, 6, 6), { zone: Z }));
     const tr = aabb(x, 3, z + 5, 12, 6, 5); tr.enter = () => actions.chest(); tr.zone = Z; triggers.push(tr);
 }
@@ -888,7 +893,7 @@ const SEG = {
             glowBox(Z, PAD.w + 0.2, 0.12, PAD.d + 0.2, p.x, p.y + 0.06, p.z, c, 1.3);
             const cup = trophy(1.4); cup.position.set(p.x, p.y + 6, p.z); zoneGroup(Z).add(cup);
             tickers.push((dt, t) => { if (zoneGroup(Z).visible) { cup.rotation.y = t * 1.6 + p.k; cup.position.y = p.y + 6 + Math.sin(t * 2 + p.k) * 0.35; } });
-            billboard([{ t: '+' + fmt(p.wins) + ' WIN' + (p.wins > 1 ? 'S' : ''), c: '#ffffff', s: '#1c1530', px: 80 }], 7, 512, new V3(p.x, p.y + 4.2, p.z), zoneGroup(Z));
+            billboard([{ t: '+' + fmt(p.wins) + ' WIN' + (p.wins > 1 ? 'S' : ''), c: '#ffffff', s: '#1c1530', px: 80 }], 7, 512, new V3(p.x, p.y + 4.2, p.z), zoneGroup(Z), true);
             const tr = aabb(p.x, p.y + 2.3, p.z, PAD.w, 4, PAD.d); tr.zone = Z;
             tr.enter = () => actions.pad(s.i, p.k);
             triggers.push(tr);
@@ -994,13 +999,48 @@ export async function buildWorld(pause) {
 // Every shader the world needs is compiled in the background (parallel compile, the page keeps
 // running), then every texture is sent to the GPU a few at a time, so nothing stalls the first
 // frames. All zones are shown while compiling so every material is seen.
-export async function warmUp(renderer, camera, pause, target) {
+// Gets every shader and texture onto the GPU while the loading screen shows, without freezing
+// the page: the shaders compile in the background (compileAsync), the depth shaders the sun's
+// shadow pass draws with included, then the textures upload and a GPU fence says when they're
+// done. The stand-ins made here are kept, so their shaders stay alive.
+const SHADOW_SIDE = { [T.FrontSide]: T.BackSide, [T.BackSide]: T.FrontSide, [T.DoubleSide]: T.DoubleSide };
+const warmKeep = [];
+export async function warmUp(renderer, camera, pause) {
     const vis = [...zoneGroups.values()].map((g) => [g, g.visible]);
     for (const [g] of vis) g.visible = true;
-    const prev = renderer.getRenderTarget();
-    renderer.setRenderTarget(target || null);
     try { await renderer.compileAsync(scene, camera); } catch (e) { renderer.compile(scene, camera); }
-    renderer.setRenderTarget(prev);
+    if (renderer.shadowMap.enabled) {
+        // The shadow pass draws each caster with three's depth material (its side flipped, its
+        // colour map kept) into a render target: one stand-in per kind of caster, compiled the
+        // same way
+        const kinds = new Map();
+        scene.traverse((o) => {
+            if (!o.isMesh || !o.castShadow || Array.isArray(o.material)) return;
+            const m = o.material, side = m.shadowSide ?? SHADOW_SIDE[m.side];
+            const key = [o.isSkinnedMesh, o.isInstancedMesh, !!m.map, side, m.alphaTest > 0].join();
+            if (kinds.has(key)) return;
+            const d = new T.MeshDepthMaterial({ side, map: m.map, alphaMap: m.alphaMap, alphaTest: m.alphaTest });
+            let p;
+            if (o.isSkinnedMesh) { p = new T.SkinnedMesh(o.geometry, d); p.bind(o.skeleton, o.bindMatrix); }
+            else if (o.isInstancedMesh) { p = new T.InstancedMesh(o.geometry, d, 1); p.instanceColor = o.instanceColor; }
+            else p = new T.Mesh(o.geometry, d);
+            kinds.set(key, p);
+        });
+        const stand = new T.Group();
+        for (const p of kinds.values()) stand.add(p);
+        // (and without fog: three draws the shadow pass with an empty scene)
+        const rt = new T.WebGLRenderTarget(1, 1);
+        const prev = renderer.getRenderTarget(), fog = scene.fog;
+        let ready = null;
+        renderer.setRenderTarget(rt);
+        scene.fog = null;
+        try { ready = renderer.compileAsync(stand, camera, scene); } catch (e) { /* compiles on first use */ }
+        scene.fog = fog;
+        renderer.setRenderTarget(prev);
+        if (ready) { try { await ready; } catch (e) { /* compiles on first use */ } }
+        rt.dispose();
+        warmKeep.push(stand);
+    }
     for (const [g, v] of vis) g.visible = v;
     const texs = new Set();
     scene.traverse((o) => {
@@ -1011,6 +1051,15 @@ export async function warmUp(renderer, camera, pause, target) {
     for (const t of texs) {
         renderer.initTexture(t);
         if (++n % 24 === 0) await pause();
+    }
+    // Wait until the GPU has the uploads done, polling between tasks instead of blocking
+    const gl = renderer.getContext();
+    if (gl.fenceSync) {
+        const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        gl.flush();
+        const t0 = performance.now();
+        while (gl.clientWaitSync(sync, 0, 0) === gl.TIMEOUT_EXPIRED && performance.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 15));
+        gl.deleteSync(sync);
     }
 }
 // Where a revive (or the QA hook) puts you at the start of stage i: the platform before it

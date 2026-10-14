@@ -9,7 +9,7 @@ import * as BX from './bloxity.js';
 import { createAvatar, loadBase, packAvatar, unpackAvatar, avatarStats } from './avatar.js';
 import { updateMaterials } from './textures.js';
 import { pad, pollGamepad, rumble, onGamepadConnection } from './gamepad.js';
-import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks, setQuality, getQuality, autoQualityAllowed, shoeFx, makeTrail, dashBurst, superRing } from './fx.js';
+import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks, setQuality, getQuality, autoQualityAllowed, shoeFx, makeTrail, dashBurst, superRing, fxWarmGroup } from './fx.js';
 import {
     buildWorld, warmUp, SPAWN, refreshShop, renderBoards, updateLobbySigns, updateWorld, cullZones, checkpoints, stageSpawn, poles, treadOwned,
 } from './world.js';
@@ -1227,21 +1227,43 @@ async function prepareWorld() {
     step('Preparing graphics…');
     // From the spawn view, so the first frame needs nothing new
     camera.position.set(0, 9, -60); camera.lookAt(0, 6, -38); camera.updateMatrixWorld();
-    await warmUp(renderer, camera, pause, null);
-    // A throw-away player model stands at the spawn for one hidden frame, so the character shaders
-    // (skinned, and their shadows) are ready too and joining doesn't stutter
+    // A stand-in player model (with its skin and hat variants) and one of each effect join the
+    // warm-up, so joining, a skin loading in or the first sparkle compile nothing. They leave the
+    // scene after one hidden frame but are never disposed, which keeps their shaders alive.
+    const extras = [fxWarmGroup()];
     try {
         const base = await Promise.race([loadBase(), new Promise((r) => setTimeout(r, 4000))]);
         const a = base ? await createAvatar(null) : null;
         if (a) {
             a.root.position.copy(SPAWN);
-            scene.add(a.root);
             a.update(1 / 60, { t: 0 });
-            render();
-            scene.remove(a.root);
-            a.dispose();
-        } else render();
-    } catch (e) { render(); }
+            extras.push(a.root, avatarVariants(a.root));
+        }
+    } catch (e) { /* the player model's shaders compile when it first shows instead */ }
+    for (const o of extras) scene.add(o);
+    await warmUp(renderer, camera, pause);
+    render();
+    for (const o of extras) scene.remove(o);
+}
+// The textured versions of the player material: the skin arrives after the model shows, hats and
+// back items are plain meshes with a texture
+function avatarVariants(root) {
+    const tex = new T.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    tex.needsUpdate = true;
+    const g = new T.Group();
+    g.position.copy(SPAWN);
+    let sk = null;
+    root.traverse((c) => { if (!sk && c.isSkinnedMesh) sk = c; });
+    if (sk) {
+        const s = new T.SkinnedMesh(sk.geometry, new T.MeshLambertMaterial({ map: tex }));
+        s.bind(sk.skeleton, sk.bindMatrix);
+        s.castShadow = true;
+        g.add(s);
+    }
+    const m = new T.Mesh(new T.BoxGeometry(0.1, 0.1, 0.1), new T.MeshLambertMaterial({ map: tex }));
+    m.castShadow = true;
+    g.add(m);
+    return g;
 }
 async function boot() {
     BX.initBloxity();

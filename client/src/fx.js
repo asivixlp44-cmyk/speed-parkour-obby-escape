@@ -17,17 +17,35 @@ if (!QUALITIES[quality]) quality = 'medium';
 renderer.toneMapping = T.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 
-function applyQuality() {
-    const q = QUALITIES[quality];
+const setShadows = (on) => { renderer.shadowMap.enabled = on; sun.castShadow = on; };
+let applying = 0;
+async function applyQuality(now) {
+    const q = QUALITIES[quality], token = ++applying;
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.ratio));
-    renderer.shadowMap.enabled = q.shadows;
-    sun.castShadow = q.shadows;
+    resizeFx();
     if (sun.shadow.mapSize.x !== q.shadowMap) {
         sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
     }
-    scene.traverse((o) => { if (o.material) { const m = Array.isArray(o.material) ? o.material : [o.material]; m.forEach((x) => { x.needsUpdate = true; }); } });
-    resizeFx();
+    const was = renderer.shadowMap.enabled;
+    if (was === q.shadows) return;
+    if (now) { setShadows(q.shadows); return; }
+    // Shadows on or off changes every lit shader. Compile the new ones in the background while
+    // the game keeps drawing with the old ones, then switch: no freeze on a slow PC.
+    setShadows(q.shadows);
+    let ready = null;
+    try { ready = renderer.compileAsync(scene, camera); } catch (e) { /* switch straight away */ }
+    setShadows(was);
+    syncLights();
+    if (ready) { try { await ready; } catch (e) { /* switch anyway */ } }
+    if (token === applying) { setShadows(q.shadows); syncLights(); }
+}
+// three draws the shadow pass with the lights as they were last set up (it sets them up after
+// that pass), so after a compile or a switch set them up for what's drawn next: otherwise the
+// shadow pass compiles new depth shaders on the spot
+const noObjects = new T.Group();
+function syncLights() {
+    try { renderer.compile(noObjects, camera, scene); } catch (e) { /* next frame sets them up */ }
 }
 export function getQuality() { return quality; }
 // auto: a step down made by the frame-rate watcher (main.js); anything else is the player's choice
@@ -208,6 +226,20 @@ export function makeTrail(color) {
     };
 }
 
+// One of each effect material, put in the scene for the loading warm-up (main.js) so the first
+// sparkle, ring or trail in play doesn't stop the game to compile its shader. Kept, never disposed,
+// so those shaders stay alive.
+export function fxWarmGroup() {
+    const g = new T.Group();
+    for (const map of [softTex, starTex]) g.add(new T.Sprite(new T.SpriteMaterial({ map, transparent: true, depthWrite: false })));
+    const tg = new T.BufferGeometry();
+    tg.setAttribute('position', new T.BufferAttribute(new Float32Array(9), 3));
+    tg.setAttribute('color', new T.BufferAttribute(new Float32Array(9), 3));
+    g.add(new T.Mesh(tg, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, toneMapped: false })));
+    g.add(new T.Mesh(new T.RingGeometry(0.8, 1, 8), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: T.DoubleSide })));
+    return g;
+}
+
 // Fire puff (jetpack flames)
 export function flame(at, spread, size, vel) {
     const p = new V3(at.x + (Math.random() - 0.5) * spread, at.y + (Math.random() - 0.5) * spread * 0.5, at.z + (Math.random() - 0.5) * spread);
@@ -294,4 +326,4 @@ export function updateFx(dt) {
     }
 }
 
-applyQuality();
+applyQuality(true);

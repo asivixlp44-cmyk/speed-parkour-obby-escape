@@ -11,7 +11,11 @@ export const canvas = $('#view');
 export const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = T.PCFSoftShadowMap;
+// Shader error checks cost extra blocking GPU calls per shader; only in development
+renderer.debug.checkShaderErrors = import.meta.env.DEV;
+// PCFShadowMap: three r186 removed PCFSoft and switches it at the first shadow frame, which
+// recompiles every material at once (a long freeze when the game starts)
+renderer.shadowMap.type = T.PCFShadowMap;
 
 export const scene = new T.Scene();
 export const FOG = 0xb8acec;
@@ -145,6 +149,14 @@ export function texFrom(cv) {
     t.anisotropy = 4;
     return t;
 }
+// A text texture by its content: the same label ("+1 WIN", "Slide Under!", "+1 Speed") is drawn
+// and uploaded to the GPU once and shared by every sign that shows it. Never dispose these.
+const sharedTexs = new Map();
+export function sharedTex(key, draw) {
+    let t = sharedTexs.get(key);
+    if (!t) { t = texFrom(draw()); sharedTexs.set(key, t); }
+    return t;
+}
 
 // ----- Roblox studs -----
 // One texture tile is 8 x 8 studs (8 x 8 units, a stud per unit, like Roblox). Each stud is a
@@ -265,15 +277,20 @@ export function textCanvas(lines, W) {
     }
     return cv;
 }
-export function billboard(lines, worldW, W, pos, parent) {
+// shared: a fixed label whose texture can be shared with others (see sharedTex); its own
+// texture is made only when the text changes (set)
+export function billboard(lines, worldW, W, pos, parent, shared) {
     W = W || 512;
-    const cv = textCanvas(lines, W);
-    const sp = new T.Sprite(new T.SpriteMaterial({ map: texFrom(cv), transparent: true, depthWrite: false, toneMapped: false }));
+    const map = shared ? sharedTex('bb|' + W + '|' + JSON.stringify(lines), () => textCanvas(lines, W)) : texFrom(textCanvas(lines, W));
+    const cv = map.image;
+    const sp = new T.Sprite(new T.SpriteMaterial({ map, transparent: true, depthWrite: false, toneMapped: false }));
     sp.scale.set(worldW, worldW * cv.height / cv.width, 1);
     if (pos) sp.position.copy(pos);
+    sp.userData.ownTex = !shared;
     sp.userData.set = (nl) => {
         const c2 = textCanvas(nl, W);
-        sp.material.map.dispose();
+        if (sp.userData.ownTex) sp.material.map.dispose();
+        sp.userData.ownTex = true;
         sp.material.map = texFrom(c2);
         sp.material.needsUpdate = true;
         sp.scale.set(worldW, worldW * c2.height / c2.width, 1);
@@ -376,7 +393,7 @@ export function confettiAt(pos) {
 }
 const floaters = [];
 export function floatText(text, color, pos, size) {
-    const sp = billboard([{ t: text, c: color, s: '#16121f', px: 70 }], size || 5, 512, pos);
+    const sp = billboard([{ t: text, c: color, s: '#16121f', px: 70 }], size || 5, 512, pos, null, true);
     floaters.push({ sp, t: 1.1 });
 }
 export function updateEffects(dt) {
@@ -390,7 +407,7 @@ export function updateEffects(dt) {
     for (let i = floaters.length - 1; i >= 0; i--) {
         const f = floaters[i];
         f.t -= dt; f.sp.position.y += dt * 4; f.sp.material.opacity = Math.min(1, f.t * 2);
-        if (f.t <= 0) { scene.remove(f.sp); f.sp.material.map.dispose(); f.sp.material.dispose(); floaters.splice(i, 1); }
+        if (f.t <= 0) { scene.remove(f.sp); f.sp.material.dispose(); floaters.splice(i, 1); }
     }
 }
 
