@@ -13,8 +13,8 @@ let quality = isTouch ? 'low' : 'medium';
 try { quality = localStorage.getItem('spo_quality2') || quality; } catch (e) { /* default */ }
 if (!QUALITIES[quality]) quality = 'medium';
 
-// Neutral tone mapping keeps every colour close to its authored sRGB value
-renderer.toneMapping = T.NeutralToneMapping;
+// No tone mapping, like Bloxity's top games: colours go to the screen as lit
+renderer.toneMapping = T.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const setShadows = (on) => { renderer.shadowMap.enabled = on; sun.castShadow = on; };

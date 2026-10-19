@@ -89,10 +89,10 @@ resize();
 // seconds at load. A stronger sky / ground hemisphere light gives the same soft fill instead, and
 // the sun adds direction and shadows on top.
 // Tuned so the matte lobby matches the reference video (floor about #8c7bb6) with dark shaded sides
-export const hemi = new T.HemisphereLight(0xf2eeff, 0x6a5a98, 2.2);
-export const ambient = new T.AmbientLight(0xffffff, 0.35);
+export const hemi = new T.HemisphereLight(0xf2eeff, 0x6a5a98, 1.1);
+export const ambient = new T.AmbientLight(0xffffff, 0.45);
 scene.add(hemi, ambient);
-export const sun = new T.DirectionalLight(0xfff2e6, 3.0);
+export const sun = new T.DirectionalLight(0xfff2e6, 1.5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 340 });
